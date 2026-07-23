@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>fetch-message-signatures browser tests</title>
+  </head>
+  <body>
+    <script type="module">
+      globalThis.fetchMessageSignaturesTestResults = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        completed: false,
+        tests: [],
+      }
+
+      try {
+        await import('./browser-suite.js')
+      } catch (error) {
+        const results = globalThis.fetchMessageSignaturesTestResults
+        results.total = 1
+        results.failed = 1
+        results.completed = true
+        results.tests = [
+          {
+            name: 'load browser test module',
+            status: 'failed',
+            error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          },
+        ]
+      }
+    </script>
+  </body>
+</html>
