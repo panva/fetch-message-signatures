@@ -1,0 +1,66 @@
+{
+  "name": "fetch-message-signatures",
+  "version": "0.1.0",
+  "description": "HTTP Message Signatures (RFC 9421) for the Fetch API",
+  "keywords": [
+    "browser",
+    "bun",
+    "cloudflare",
+    "deno",
+    "fetch",
+    "http",
+    "rfc9421",
+    "signature",
+    "webcrypto"
+  ],
+  "homepage": "https://github.com/panva/fetch-message-signatures",
+  "repository": "panva/fetch-message-signatures",
+  "funding": {
+    "url": "https://github.com/sponsors/panva"
+  },
+  "license": "MIT",
+  "author": "Filip Skokan <panva.ip@gmail.com>",
+  "sideEffects": false,
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "docs",
+    "guides",
+    "index.d.ts",
+    "index.d.ts.map",
+    "index.js",
+    "index.ts"
+  ],
+  "scripts": {
+    "build": "node build.cjs",
+    "docs": "typedoc",
+    "format": "prettier --log-level silent --cache --write '**/*.{ts,js,mjs,cjs,json,yml}' '**/*.md'",
+    "format:check": "prettier --check '**/*.{ts,js,mjs,cjs,json,yml}' '**/*.md'",
+    "test": "node --test --no-warnings",
+    "test:docs": "bash ./check-examples.sh",
+    "test:types": "tsc -p tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "amaro": "^1.1.10",
+    "prettier": "^3.9.5",
+    "prettier-plugin-jsdoc": "^1.8.1",
+    "remark-insert-headings": "^1.0.0",
+    "remark-toc": "^9.0.0",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.12.0",
+    "typedoc-plugin-remark": "^2.0.1",
+    "typescript": "^6.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

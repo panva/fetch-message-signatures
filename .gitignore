@@ -1,0 +1,13 @@
+node_modules/
+.npm/
+.DS_Store
+*.log
+*.tgz
+*.tsbuildinfo
+.prettier-cache
+.docs-examples/
+
+# Generated package artifacts
+index.js
+index.d.ts
+index.d.ts.map
