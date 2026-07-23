@@ -1,0 +1,16 @@
+node_modules/
+.npm/
+.DS_Store
+*.log
+*.tgz
+*.tsbuildinfo
+.prettier-cache
+.docs-examples/
+
+# Generated package artifacts
+index.js
+index.d.ts
+index.d.ts.map
+test/.workerd.capnp
+test/runners/run-workerd.bundle.js
+test/runners/browser-suite.bundle.js

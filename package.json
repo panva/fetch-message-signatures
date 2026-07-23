@@ -1,0 +1,72 @@
+{
+  "name": "fetch-message-signatures",
+  "version": "0.0.0",
+  "description": "HTTP Message Signatures (RFC 9421) for the Fetch API",
+  "keywords": [
+    "browser",
+    "bun",
+    "cloudflare",
+    "deno",
+    "fetch",
+    "http",
+    "rfc9421",
+    "signature",
+    "webcrypto",
+    "workerd"
+  ],
+  "homepage": "https://github.com/panva/fetch-message-signatures",
+  "repository": "panva/fetch-message-signatures",
+  "funding": {
+    "url": "https://github.com/sponsors/panva"
+  },
+  "license": "MIT",
+  "author": "Filip Skokan <panva.ip@gmail.com>",
+  "sideEffects": false,
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.d.ts",
+    "index.d.ts.map",
+    "index.js",
+    "index.ts"
+  ],
+  "scripts": {
+    "build": "node build.cjs",
+    "check:bundles": "node tools/bundle-families.js",
+    "check:packaging": "publint --strict && node tools/attw-check.js",
+    "docs": "typedoc",
+    "fixtures": "node update-fixtures.js",
+    "format": "prettier --log-level silent --cache --write '**/*.{ts,js,mjs,cjs,json,yml}' '**/*.md'",
+    "format:check": "prettier --check '**/*.{ts,js,mjs,cjs,json,yml}' '**/*.md'",
+    "test": "node --test --no-warnings test/*.ts",
+    "test:browsers": "node test/browser.mjs",
+    "test:bun": "bun test ./test/*.ts --path-ignore-patterns='test/e2e.ts'",
+    "test:deno": "deno test --unstable-no-legacy-abort --no-check --allow-read --allow-net=127.0.0.1 test/accept-signature-boundaries.ts test/accept-signature.ts test/algorithms.ts test/fields.ts test/rfc9421-appendix.ts test/rfc9421.ts test/structured-fields-display-string.ts test/structured-fields.ts test/robustness.ts test/runtime-e2e.ts test/signatures.ts",
+    "test:docs": "bash ./check-examples.sh",
+    "test:types": "tsc -p tsconfig.test.json",
+    "test:workerd": "./test/.workerd.sh",
+    "typecheck:dist": "./tools/typecheck-dist.sh"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@hono/node-server": "^2.0.12",
+    "@types/node": "^24.13.3",
+    "amaro": "^1.1.11",
+    "esbuild": "^0.28.1",
+    "playwright": "^1.62.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-jsdoc": "^1.8.1",
+    "publint": "0.3.23",
+    "remark-insert-headings": "^1.0.0",
+    "remark-toc": "^9.0.0",
+    "serve": "^14.2.6",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.12.0",
+    "typedoc-plugin-remark": "^2.0.1",
+    "typescript": "^6.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

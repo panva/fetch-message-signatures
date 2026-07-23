@@ -1,0 +1,6 @@
+build
+CHANGELOG.md
+dist
+docs
+node_modules
+test/fixtures

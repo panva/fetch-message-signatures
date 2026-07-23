@@ -1,0 +1,84 @@
+name: Release fetch-message-signatures
+
+permissions: {}
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: npm stage publish
+
+  cleanup:
+    needs:
+      - npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # 0.x is developed only on main, so it gets no maintenance branch. From 1.0.0 on, each major
+      # keeps one, and this starts creating it without needing a change here.
+      - name: Push the maintenance branch
+        run: |
+          major="${GITHUB_REF_NAME#v}"
+          major="${major%%.*}"
+          if [ "$major" = "0" ]; then
+            echo "0.x is not maintained on a release branch, skipping"
+            exit 0
+          fi
+          git push origin "$GITHUB_SHA:refs/heads/v${major}.x"
+      - run: git rm index.js index.d.ts index.d.ts.map
+      - run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: cleanup after release"
+      - run: git push origin HEAD:main
+
+  github:
+    needs:
+      - npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      discussions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - name: Setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+      - name: Create GitHub Release
+        run: node tools/release-notes.cjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  npm-availability:
+    needs:
+      - github
+    permissions:
+      contents: write
+      discussions: write
+    uses: ./.github/workflows/npm-availability.yml
+    with:
+      tag: ${{ github.ref_name }}
