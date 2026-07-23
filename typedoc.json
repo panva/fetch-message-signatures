@@ -1,0 +1,60 @@
+{
+  "$schema": "https://typedoc-plugin-markdown.org/schema.json",
+  "logLevel": "Warn",
+  "treatWarningsAsErrors": true,
+  "disableSources": true,
+  "hideBreadcrumbs": true,
+  "visibilityFilters": {
+    "protected": false,
+    "private": false,
+    "inherited": true,
+    "external": false
+  },
+  "includeVersion": false,
+  "entryPoints": ["index.ts"],
+  "excludeExternals": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "gitRevision": "main",
+  "hideGenerator": true,
+  "out": "docs",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-plugin-remark", "./docs-theme.ts"],
+  "readme": "none",
+  "sort": ["kind", "static-first", "required-first", "alphabetical"],
+  "groupOrder": [
+    "Sender",
+    "Recipient",
+    "Cryptographic Algorithms",
+    "Signature Negotiation",
+    "Fetch Integration",
+    "Components and Structured Fields",
+    "Interfaces",
+    "Type Aliases"
+  ],
+  "githubPages": false,
+  "parametersFormat": "table",
+  "hidePageHeader": true,
+  "expandObjects": false,
+  "expandParameters": false,
+  "interfacePropertiesFormat": "list",
+  "tableColumnSettings": {
+    "hideDefaults": true,
+    "hideInherited": false,
+    "hideModifiers": false,
+    "hideOverrides": false,
+    "hideSources": false,
+    "hideValues": false,
+    "leftAlignHeaders": true
+  },
+  "theme": "fetch-message-signatures-markdown",
+  "remarkStringifyOptions": { "bullet": "-" },
+  "remarkPlugins": [
+    {
+      "applyTo": ["Interface"],
+      "plugins": [
+        ["remark-insert-headings", { "text": "Contents" }],
+        ["remark-toc", { "maxDepth": 3, "skip": "See|Example" }]
+      ]
+    }
+  ]
+}
