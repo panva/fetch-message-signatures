@@ -1,6 +1,8 @@
 build
-CHANGELOG.md
+coverage
 dist
 docs
 node_modules
+package-lock.json
 test/fixtures
+CHANGELOG.md
