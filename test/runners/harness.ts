@@ -333,6 +333,14 @@ const strict = Object.assign(assert, {
     }
   },
 
+  doesNotThrow(body: () => unknown, message?: string | Error): void {
+    try {
+      body()
+    } catch (error) {
+      failAssertion(message, `Expected no exception, got ${String(error)}`)
+    }
+  },
+
   async doesNotReject(
     target: Promise<unknown> | (() => Promise<unknown>),
     message?: string | Error,

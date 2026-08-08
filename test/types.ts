@@ -4,9 +4,14 @@ import {
   createVerifyingFetch,
   date,
   displayString,
+  parseStructuredField,
+  serializeStructuredField,
 } from '../index.ts'
 import type {
   SignatureParameters,
+  StructuredFieldDictionary,
+  StructuredFieldItem,
+  StructuredFieldList,
   SignedFetchOptions,
   SignerFactory,
   SigningFetchOptions,
@@ -59,6 +64,17 @@ void signer
 void verifier
 void synchronousSigner
 void synchronousVerifier
+
+// A literal top-level type narrows the result, so no assertion is needed at a call site.
+const parsedDictionary: StructuredFieldDictionary = parseStructuredField('a=1', 'dictionary')
+const parsedList: StructuredFieldList = parseStructuredField('1, 2', 'list')
+const parsedItem: StructuredFieldItem = parseStructuredField('1', 'item')
+
+const roundTripped: string = serializeStructuredField(parsedDictionary, 'dictionary')
+
+void parsedList
+void parsedItem
+void roundTripped
 
 const structuredDate: StructuredFieldDate = date(1_659_578_233)
 const structuredDisplayString: StructuredFieldDisplayString = displayString('snowman ☃')

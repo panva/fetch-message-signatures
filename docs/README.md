@@ -123,17 +123,24 @@ const order = await response.json()
 | [parseAcceptSignature](functions/parseAcceptSignature.md) | Parses an `Accept-Signature` field value into its labeled signature requests. |
 | [signRequested](functions/signRequested.md) | Fulfills and appends one parsed `Accept-Signature` request. |
 
-## Components and Structured Fields
+## Components
 
 | Function | Description |
 | :------ | :------ |
 | [component](functions/component.md) | Creates a component identifier while preserving the supplied parameter order. |
 | [createSignatureBase](functions/createSignatureBase.md) | Creates the RFC 9421 signature base for a Fetch `Request` or `Response`. |
+| [findComponents](functions/findComponents.md) | Returns every component identifier in a list that resolves to one field or derived component name, whatever parameters it carries. |
+| [includesComponent](functions/includesComponent.md) | Reports whether a list of component identifiers contains one particular identifier. |
+
+## Structured Fields
+
+| Function | Description |
+| :------ | :------ |
 | [date](functions/date.md) | Creates a validated Structured Field Date. |
 | [decimal](functions/decimal.md) | Creates a validated Structured Field Decimal. |
 | [displayString](functions/displayString.md) | Creates a validated Structured Field Display String. |
-| [findComponents](functions/findComponents.md) | Returns every component identifier in a list that resolves to one field or derived component name, whatever parameters it carries. |
-| [includesComponent](functions/includesComponent.md) | Reports whether a list of component identifiers contains one particular identifier. |
+| [parseStructuredField](functions/parseStructuredField.md) | Parses an HTTP field value as one of the three RFC 9651 top-level Structured Field types. |
+| [serializeStructuredField](functions/serializeStructuredField.md) | Serializes a Structured Field value into an HTTP field value. |
 | [token](functions/token.md) | Creates a validated Structured Field Token, for use as an extension signature metadata parameter value. |
 
 ## Cryptographic Algorithms
@@ -180,6 +187,8 @@ const order = await response.json()
 | [StructuredFieldDate](interfaces/StructuredFieldDate.md) | A Structured Field Date represented as integer UNIX seconds. |
 | [StructuredFieldDecimal](interfaces/StructuredFieldDecimal.md) | A Structured Field Decimal, including integral decimal values such as `1.0`. |
 | [StructuredFieldDisplayString](interfaces/StructuredFieldDisplayString.md) | A Structured Field Display String. |
+| [StructuredFieldInnerList](interfaces/StructuredFieldInnerList.md) | A Structured Field Inner List: an ordered list of Items with its own parameters. |
+| [StructuredFieldItem](interfaces/StructuredFieldItem.md) | A Structured Field Item: one bare item with its parameters. |
 | [StructuredFieldToken](interfaces/StructuredFieldToken.md) | A Structured Field Token. Plain JavaScript strings represent Structured Field Strings. |
 | [VerificationContext](interfaces/VerificationContext.md) | Target-message context supplied to a verifier factory. |
 | [VerificationPolicy](interfaces/VerificationPolicy.md) | Explicit application policy required before a cryptographically valid signature is accepted. |
@@ -204,6 +213,12 @@ const order = await response.json()
 | [SignatureParameters](type-aliases/SignatureParameters.md) | Ordered parameters are recommended because their order is covered by the signature. Object property insertion order is preserved when a record is supplied. |
 | [SignatureParameterValue](type-aliases/SignatureParameterValue.md) | A value that can be used as an HTTP signature metadata parameter. |
 | [SignerFactory](type-aliases/SignerFactory.md) | A synchronous factory returning a signer implementation. |
+| [StructuredFieldBareItem](type-aliases/StructuredFieldBareItem.md) | A bare item value in an HTTP Structured Field. |
+| [StructuredFieldDictionary](type-aliases/StructuredFieldDictionary.md) | A Structured Field Dictionary as ordered entries. |
+| [StructuredFieldList](type-aliases/StructuredFieldList.md) | A Structured Field List. |
+| [StructuredFieldMember](type-aliases/StructuredFieldMember.md) | A member of a Structured Field List or Dictionary. |
+| [StructuredFieldParameter](type-aliases/StructuredFieldParameter.md) | An ordered parameter on a Structured Field Item or Inner List. |
 | [StructuredFieldType](type-aliases/StructuredFieldType.md) | The top-level type of an HTTP Structured Field. |
+| [StructuredFieldValue](type-aliases/StructuredFieldValue.md) | A complete Structured Field value of one of the three top-level types. |
 | [SynchronousVerifierFactory](type-aliases/SynchronousVerifierFactory.md) | A [VerifierFactory](type-aliases/VerifierFactory.md) that resolves its verifier without suspending. |
 | [VerifierFactory](type-aliases/VerifierFactory.md) | A factory that selects trusted verification key material and an algorithm. |

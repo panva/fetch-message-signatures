@@ -32,7 +32,7 @@ A parsed HTTP message signature.
 
 ### parameters
 
-> `readonly` **parameters**: readonly readonly \[`string`, [`SignatureParameterValue`](../type-aliases/SignatureParameterValue.md)]\[]
+> `readonly` **parameters**: readonly readonly \[`string`, [`StructuredFieldBareItem`](../type-aliases/StructuredFieldBareItem.md)]\[]
 
 ***
 

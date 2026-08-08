@@ -1,6 +1,6 @@
 # Function: getSignatureParameter()
 
-> **getSignatureParameter**(`signature`, `name`): [`SignatureParameterValue`](../type-aliases/SignatureParameterValue.md) ∣ `undefined`
+> **getSignatureParameter**(`signature`, `name`): [`StructuredFieldBareItem`](../type-aliases/StructuredFieldBareItem.md) ∣ `undefined`
 
 Returns one signature metadata parameter by name, or `undefined` when the signature omits it.
 
@@ -20,7 +20,7 @@ and `alg` as a claim that [VerificationPolicy.algorithms](../interfaces/Verifica
 
 ## Returns
 
-[`SignatureParameterValue`](../type-aliases/SignatureParameterValue.md) ∣ `undefined`
+[`StructuredFieldBareItem`](../type-aliases/StructuredFieldBareItem.md) ∣ `undefined`
 
 ## Example
 

@@ -25,4 +25,4 @@ A requested HTTP message signature parsed from `Accept-Signature`.
 
 ### parameters
 
-> `readonly` **parameters**: readonly readonly \[`string`, [`SignatureParameterValue`](../type-aliases/SignatureParameterValue.md)]\[]
+> `readonly` **parameters**: readonly readonly \[`string`, [`StructuredFieldBareItem`](../type-aliases/StructuredFieldBareItem.md)]\[]

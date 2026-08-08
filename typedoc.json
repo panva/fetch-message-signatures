@@ -26,7 +26,8 @@
     "Sender",
     "Recipient",
     "Signature Negotiation",
-    "Components and Structured Fields",
+    "Components",
+    "Structured Fields",
     "Cryptographic Algorithms",
     "Interfaces",
     "Type Aliases"

@@ -178,8 +178,15 @@ export interface StructuredFieldDisplayString {
   readonly value: string
 }
 
-/** A value that can be used as an HTTP signature metadata parameter. */
-export type SignatureParameterValue =
+/**
+ * A bare item value in an HTTP Structured Field.
+ *
+ * Plain JavaScript values represent the types that cannot be confused for one another: `string` is
+ * a String, an integral `number` is an Integer, `boolean` is a Boolean, and `Uint8Array` is a Byte
+ * Sequence. The four types that would otherwise be ambiguous are wrapped, so a Token is never
+ * mistaken for a String, nor a Decimal for an Integer.
+ */
+export type StructuredFieldBareItem =
   | string
   | number
   | boolean
@@ -188,6 +195,46 @@ export type SignatureParameterValue =
   | StructuredFieldDecimal
   | StructuredFieldDate
   | StructuredFieldDisplayString
+
+/** A value that can be used as an HTTP signature metadata parameter. */
+export type SignatureParameterValue = StructuredFieldBareItem
+
+/** An ordered parameter on a Structured Field Item or Inner List. */
+export type StructuredFieldParameter = readonly [name: string, value: StructuredFieldBareItem]
+
+/** A Structured Field Item: one bare item with its parameters. */
+export interface StructuredFieldItem {
+  readonly type: 'item'
+  readonly value: StructuredFieldBareItem
+  readonly parameters: ReadonlyArray<StructuredFieldParameter>
+}
+
+/** A Structured Field Inner List: an ordered list of Items with its own parameters. */
+export interface StructuredFieldInnerList {
+  readonly type: 'inner-list'
+  readonly value: ReadonlyArray<StructuredFieldItem>
+  readonly parameters: ReadonlyArray<StructuredFieldParameter>
+}
+
+/** A member of a Structured Field List or Dictionary. */
+export type StructuredFieldMember = StructuredFieldItem | StructuredFieldInnerList
+
+/**
+ * A Structured Field Dictionary as ordered entries.
+ *
+ * Ordered rather than a `Map`, because RFC 9651 defines Dictionaries as ordered and both the
+ * serialization and, for signed fields, the signature depend on that order.
+ */
+export type StructuredFieldDictionary = ReadonlyArray<
+  readonly [name: string, value: StructuredFieldMember]
+>
+
+/** A Structured Field List. */
+export type StructuredFieldList = ReadonlyArray<StructuredFieldMember>
+
+/** A complete Structured Field value of one of the three top-level types. */
+export type StructuredFieldValue =
+  StructuredFieldDictionary | StructuredFieldList | StructuredFieldItem
 
 /**
  * A signature metadata parameter input.
@@ -1710,7 +1757,7 @@ function parseDictionary(state: ParseState): SfDictionary {
  * `Accept-Signature` fields must not do because a repeated label would silently discard a
  * signature.
  */
-function parseStructuredField(
+function parseSfTopLevel(
   input: string,
   type: StructuredFieldType,
   rejectDuplicateKeys = false,
@@ -1920,7 +1967,7 @@ function serializeDictionary(value: SfDictionary): string {
  * This is the "re-serialization" that the `sf` component parameter of RFC 9421 requires, which
  * normalizes internal whitespace and item representation.
  */
-function serializeStructuredField(value: SfTopLevel, type: StructuredFieldType): string {
+function serializeSfTopLevel(value: SfTopLevel, type: StructuredFieldType): string {
   switch (type) {
     case 'dictionary':
       return serializeDictionary(value as SfDictionary)
@@ -1955,7 +2002,7 @@ function serializeStructuredField(value: SfTopLevel, type: StructuredFieldType):
  * console.log(base)
  * ```
  *
- * @group Components and Structured Fields
+ * @group Structured Fields
  */
 export function token(value: string): StructuredFieldToken {
   if (typeof value !== 'string' || !SF_TOKEN.test(value)) {
@@ -1989,7 +2036,7 @@ export function token(value: string): StructuredFieldToken {
  * console.log(base)
  * ```
  *
- * @group Components and Structured Fields
+ * @group Structured Fields
  */
 export function decimal(value: number): StructuredFieldDecimal {
   return { type: 'decimal', value: Number(serializeDecimal(value)) }
@@ -2023,7 +2070,7 @@ export function decimal(value: number): StructuredFieldDecimal {
  * console.log(base)
  * ```
  *
- * @group Components and Structured Fields
+ * @group Structured Fields
  */
 export function date(value: number | Date): StructuredFieldDate {
   let seconds: number
@@ -2062,7 +2109,7 @@ export function date(value: number | Date): StructuredFieldDate {
  * console.log(base)
  * ```
  *
- * @group Components and Structured Fields
+ * @group Structured Fields
  */
 export function displayString(value: string): StructuredFieldDisplayString {
   if (typeof value !== 'string') {
@@ -2070,6 +2117,248 @@ export function displayString(value: string): StructuredFieldDisplayString {
   }
   serializeDisplayString(value)
   return { type: 'display-string', value }
+}
+
+/** Converts one parsed Structured Field Item into its public representation. */
+function structuredFieldItemFromSf(item: SfItem): StructuredFieldItem {
+  return {
+    type: 'item',
+    value: signatureParameterValueFromSfBareItem(item.value),
+    parameters: structuredFieldParametersFromSf(item.parameters),
+  }
+}
+
+/** Converts parsed Structured Field parameters into their public representation. */
+function structuredFieldParametersFromSf(parameters: SfParameters): StructuredFieldParameter[] {
+  return parameters.map(([name, value]) => [name, signatureParameterValueFromSfBareItem(value)])
+}
+
+/** Converts one parsed List or Dictionary member into its public representation. */
+function structuredFieldMemberFromSf(member: SfMember): StructuredFieldMember {
+  if (member.kind === 'item') {
+    return structuredFieldItemFromSf(member)
+  }
+  return {
+    type: 'inner-list',
+    value: member.value.map(structuredFieldItemFromSf),
+    parameters: structuredFieldParametersFromSf(member.parameters),
+  }
+}
+
+/**
+ * Converts application-supplied Structured Field parameters into their internal representation.
+ *
+ * Names are validated as RFC 9651 keys, and duplicates are rejected rather than silently collapsed
+ * during serialization.
+ */
+function sfParametersFromStructuredField(
+  parameters: ReadonlyArray<StructuredFieldParameter> | undefined,
+  path: string,
+): SfParameters {
+  if (parameters === undefined) {
+    return []
+  }
+  if (!Array.isArray(parameters)) {
+    fail(`${path} parameters must be an array`)
+  }
+  const output: SfParameters = []
+  const seen = new Set<string>()
+  for (const entry of parameters) {
+    if (!Array.isArray(entry) || entry.length !== 2) {
+      fail(`${path} parameters must be [name, value] entries`)
+    }
+    const [name, value] = entry as [string, StructuredFieldBareItem]
+    assertSfKey(name, `${path} parameter name`)
+    if (seen.has(name)) {
+      fail(`Duplicate ${path} parameter "${name}"`)
+    }
+    seen.add(name)
+    const bare = sfBareItemFromSignatureParameter(`${path} parameter "${name}"`, value)
+    if (bare === undefined) {
+      fail(`${path} parameter "${name}" has an unsupported value`)
+    }
+    output.push([name, bare])
+  }
+  return output
+}
+
+/** Converts one application-supplied Structured Field Item into its internal representation. */
+function sfItemFromStructuredField(item: StructuredFieldItem, path: string): SfItem {
+  if (item === null || typeof item !== 'object' || item.type !== 'item') {
+    fail(`${path} must be a Structured Field Item`)
+  }
+  const value = sfBareItemFromSignatureParameter(path, item.value)
+  if (value === undefined) {
+    fail(`${path} has an unsupported value`)
+  }
+  return { kind: 'item', value, parameters: sfParametersFromStructuredField(item.parameters, path) }
+}
+
+/** Converts one application-supplied List or Dictionary member into its internal representation. */
+function sfMemberFromStructuredField(member: StructuredFieldMember, path: string): SfMember {
+  if (member === null || typeof member !== 'object') {
+    fail(`${path} must be a Structured Field Item or Inner List`)
+  }
+  if (member.type === 'inner-list') {
+    if (!Array.isArray(member.value)) {
+      fail(`${path} Inner List value must be an array`)
+    }
+    return {
+      kind: 'inner-list',
+      value: member.value.map((entry, index) =>
+        sfItemFromStructuredField(entry, `${path} member ${index}`),
+      ),
+      parameters: sfParametersFromStructuredField(member.parameters, path),
+    }
+  }
+  return sfItemFromStructuredField(member as StructuredFieldItem, path)
+}
+
+/**
+ * Parses an HTTP field value as one of the three RFC 9651 top-level Structured Field types.
+ *
+ * The whole value must parse, so trailing content is rejected rather than ignored. A Dictionary
+ * that repeats a key keeps the last occurrence, as RFC 9651 requires.
+ *
+ * Values come back in the same model {@link MessageSignature} parameters use: plain JavaScript
+ * values for the unambiguous types, and wrappers for Token, Decimal, Date, and Display String. See
+ * {@link StructuredFieldBareItem}.
+ *
+ * @example
+ *
+ * Reading a Dictionary field whose members are Strings with parameters.
+ *
+ * ```ts
+ * const dictionary = FetchSig.parseStructuredField(
+ *   'sig1="https://agent.example";type=directory, sig2="https://other.example"',
+ *   'dictionary',
+ * )
+ *
+ * for (const [label, member] of dictionary) {
+ *   if (member.type !== 'item' || typeof member.value !== 'string') {
+ *     throw new Error(`${label} must be a String`)
+ *   }
+ *   const type = member.parameters.find(([name]) => name === 'type')?.[1]
+ *   // sig1 https://agent.example { type: 'token', value: 'directory' }
+ *   console.log(label, member.value, type)
+ * }
+ * ```
+ *
+ * @param value - The complete HTTP field value.
+ * @param type - The top-level type the field is defined to use.
+ * @group Structured Fields
+ */
+export function parseStructuredField(value: string, type: 'dictionary'): StructuredFieldDictionary
+export function parseStructuredField(value: string, type: 'list'): StructuredFieldList
+export function parseStructuredField(value: string, type: 'item'): StructuredFieldItem
+export function parseStructuredField(value: string, type: StructuredFieldType): StructuredFieldValue
+export function parseStructuredField(
+  value: string,
+  type: StructuredFieldType,
+): StructuredFieldValue {
+  if (typeof value !== 'string') {
+    fail('"value" must be a string')
+  }
+  assertStructuredFieldType(type)
+  const parsed = parseSfTopLevel(value, type)
+  switch (type) {
+    case 'dictionary':
+      return (parsed as SfDictionary).map(([name, member]) => [
+        name,
+        structuredFieldMemberFromSf(member),
+      ])
+    case 'list':
+      return (parsed as SfList).map(structuredFieldMemberFromSf)
+    case 'item':
+      return structuredFieldItemFromSf(parsed as SfItem)
+  }
+}
+
+/**
+ * Serializes a Structured Field value into an HTTP field value.
+ *
+ * Every key, Token, Decimal, Date, and Display String is validated, so a value this rejects is one
+ * no conforming recipient would have accepted.
+ *
+ * @example
+ *
+ * ```ts
+ * const field = FetchSig.serializeStructuredField(
+ *   [
+ *     [
+ *       'sig1',
+ *       {
+ *         type: 'item',
+ *         value: 'https://agent.example',
+ *         parameters: [['type', FetchSig.token('directory')]],
+ *       },
+ *     ],
+ *   ],
+ *   'dictionary',
+ * )
+ *
+ * // sig1="https://agent.example";type=directory
+ * console.log(field)
+ * ```
+ *
+ * @param value - The value to serialize, in the shape {@link parseStructuredField} returns.
+ * @param type - The top-level type the field is defined to use.
+ * @group Structured Fields
+ */
+export function serializeStructuredField(
+  value: StructuredFieldDictionary,
+  type: 'dictionary',
+): string
+export function serializeStructuredField(value: StructuredFieldList, type: 'list'): string
+export function serializeStructuredField(value: StructuredFieldItem, type: 'item'): string
+export function serializeStructuredField(
+  value: StructuredFieldValue,
+  type: StructuredFieldType,
+): string
+export function serializeStructuredField(
+  value: StructuredFieldValue,
+  type: StructuredFieldType,
+): string {
+  assertStructuredFieldType(type)
+  if (type === 'item') {
+    return serializeSfTopLevel(
+      sfItemFromStructuredField(value as StructuredFieldItem, 'Item'),
+      type,
+    )
+  }
+  if (!Array.isArray(value)) {
+    fail(`A Structured Field ${type} must be an array`)
+  }
+  if (type === 'list') {
+    return serializeSfTopLevel(
+      (value as StructuredFieldList).map((member, index) =>
+        sfMemberFromStructuredField(member, `List member ${index}`),
+      ),
+      type,
+    )
+  }
+  const entries: SfDictionary = []
+  const seen = new Set<string>()
+  for (const entry of value as StructuredFieldDictionary) {
+    if (!Array.isArray(entry) || entry.length !== 2) {
+      fail('A Structured Field Dictionary must contain [name, value] entries')
+    }
+    const [name, member] = entry as [string, StructuredFieldMember]
+    assertSfKey(name, 'Structured Field Dictionary key')
+    if (seen.has(name)) {
+      fail(`Duplicate Structured Field Dictionary key "${name}"`)
+    }
+    seen.add(name)
+    entries.push([name, sfMemberFromStructuredField(member, `Dictionary member "${name}"`)])
+  }
+  return serializeSfTopLevel(entries, type)
+}
+
+/** Rejects a top-level Structured Field type that is not one of the three RFC 9651 defines. */
+function assertStructuredFieldType(type: StructuredFieldType): void {
+  if (type !== 'dictionary' && type !== 'list' && type !== 'item') {
+    fail('"type" must be "dictionary", "list", or "item"')
+  }
 }
 
 /**
@@ -2131,7 +2420,7 @@ export function displayString(value: string): StructuredFieldDisplayString {
  * console.log(base)
  * ```
  *
- * @group Components and Structured Fields
+ * @group Components
  */
 export function component(
   name: string,
@@ -2208,7 +2497,7 @@ export function component(
  * @param components - Identifiers to search, such as {@link MessageSignature.components} or a
  *   covered component list an application is about to sign.
  * @param component - The identifier to look for.
- * @group Components and Structured Fields
+ * @group Components
  */
 export function includesComponent(
   components: ReadonlyArray<ComponentIdentifier>,
@@ -2271,7 +2560,7 @@ export function includesComponent(
  *   name.
  *
  * @returns The matching identifiers in list order, normalized, or an empty array.
- * @group Components and Structured Fields
+ * @group Components
  */
 export function findComponents(
   components: ReadonlyArray<ComponentIdentifier>,
@@ -3338,7 +3627,7 @@ function deriveFieldComponentValue(
     }
     // Indexed on first use, so that covering many keys of one Dictionary stays linear in its size.
     if (field.members === undefined) {
-      const dictionary = parseStructuredField(field.combined, 'dictionary') as SfDictionary
+      const dictionary = parseSfTopLevel(field.combined, 'dictionary') as SfDictionary
       field.members = new Map(dictionary)
     }
     const member = field.members.get(key as string)
@@ -3353,7 +3642,7 @@ function deriveFieldComponentValue(
     if (type === undefined) {
       fail(`Structured Field type for "${identifier.name}" is required by the "sf" parameter`)
     }
-    field.serialized ??= serializeStructuredField(parseStructuredField(field.combined, type), type)
+    field.serialized ??= serializeSfTopLevel(parseSfTopLevel(field.combined, type), type)
     return field.serialized
   }
 
@@ -3514,7 +3803,7 @@ function assertSignatureBaseUnchanged(
  * console.log(base)
  * ```
  *
- * @group Components and Structured Fields
+ * @group Components
  */
 export function createSignatureBase(
   message: Request | Response,
@@ -3643,7 +3932,7 @@ function parseSignatureValueMember(label: string, member: SfMember): ParsedSigna
 
 /** Parses a `Signature-Input` field value into validated members, rejecting a repeated label. */
 function parseSignatureInputInternal(value: string): ParsedSignatureInput[] {
-  const dictionary = parseStructuredField(value, 'dictionary', true) as SfDictionary
+  const dictionary = parseSfTopLevel(value, 'dictionary', true) as SfDictionary
   return dictionary.map(([label, member]) => {
     return validateSignatureInput(parseSignatureInputMember(label, member))
   })
@@ -3654,7 +3943,7 @@ function parseSignatureInputInternal(value: string): ParsedSignatureInput[] {
  * label.
  */
 function parseSignatureInternal(value: string): ParsedSignatureValue[] {
-  const dictionary = parseStructuredField(value, 'dictionary', true) as SfDictionary
+  const dictionary = parseSfTopLevel(value, 'dictionary', true) as SfDictionary
   return dictionary.map(([label, member]) => parseSignatureValueMember(label, member))
 }
 
@@ -3764,8 +4053,8 @@ function parseSignatureFieldDictionaries(headers: Headers): {
   if (signatureInput === null || signature === null) {
     fail('Signature and Signature-Input fields must both be present')
   }
-  const inputs = parseStructuredField(signatureInput, 'dictionary', true) as SfDictionary
-  const values = parseStructuredField(signature, 'dictionary', true) as SfDictionary
+  const inputs = parseSfTopLevel(signatureInput, 'dictionary', true) as SfDictionary
+  const values = parseSfTopLevel(signature, 'dictionary', true) as SfDictionary
   const inputLabels = new Set(inputs.map(([label]) => label))
   const valueLabels = new Set(values.map(([label]) => label))
   if (
@@ -4874,7 +5163,7 @@ function normalizeRequestedParameters(parameters: SignatureParameters | undefine
  * label.
  */
 function parseAcceptSignatureInternal(value: string): ParsedSignatureInput[] {
-  const dictionary = parseStructuredField(value, 'dictionary', true) as SfDictionary
+  const dictionary = parseSfTopLevel(value, 'dictionary', true) as SfDictionary
   return dictionary.map(([label, member]) => {
     if (member.kind !== 'inner-list') {
       fail(`Accept-Signature member "${label}" must be an Inner List`)

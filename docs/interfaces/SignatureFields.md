@@ -41,7 +41,7 @@ The result of creating one signature, ready to be added to the corresponding HTT
 
 ### parameters
 
-> `readonly` **parameters**: readonly readonly \[`string`, [`SignatureParameterValue`](../type-aliases/SignatureParameterValue.md)]\[]
+> `readonly` **parameters**: readonly readonly \[`string`, [`StructuredFieldBareItem`](../type-aliases/StructuredFieldBareItem.md)]\[]
 
 #### Inherited from
 

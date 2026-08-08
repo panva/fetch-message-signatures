@@ -202,6 +202,52 @@ console.log(base)
 Each member is serialized on its own: an Inner List keeps its parentheses, and a member with no
 value is the Boolean `?1`. The Dictionary key itself is not part of the component value.
 
+## Parsing and serializing Structured Fields
+
+RFC 9421 is built on Structured Fields ([RFC 9651](https://www.rfc-editor.org/info/rfc9651/)), and
+the same parser and serializer are exported for fields this package does not define:
+
+```ts
+const header = 'sig1="https://agent.example";type=directory, sig2="https://other.example"'
+
+for (const [label, member] of FetchSig.parseStructuredField(header, 'dictionary')) {
+  if (member.type !== 'item' || typeof member.value !== 'string') {
+    throw new Error(`${label} must be a String`)
+  }
+  const type = member.parameters.find(([name]) => name === 'type')?.[1]
+  // sig1 https://agent.example { type: 'token', value: 'directory' }
+  console.log(label, member.value, type)
+}
+```
+
+The top-level type is an argument because a Structured Field's type comes from its definition, not
+from its syntax. Passing `'dictionary'`, `'list'`, or `'item'` as a literal narrows the return type
+to `StructuredFieldDictionary`, `StructuredFieldList`, or `StructuredFieldItem`.
+
+Values use the same model as signature metadata parameters: plain JavaScript values for the types
+that cannot be confused for one another, and wrappers for the four that can.
+
+| Structured Field type | JavaScript                          |
+| --------------------- | ----------------------------------- |
+| String                | `string`                            |
+| Integer               | `number`, integral                  |
+| Boolean               | `boolean`                           |
+| Byte Sequence         | `Uint8Array`                        |
+| Decimal               | `{ type: 'decimal', value }`        |
+| Token                 | `{ type: 'token', value }`          |
+| Date                  | `{ type: 'date', value }`           |
+| Display String        | `{ type: 'display-string', value }` |
+
+`serializeStructuredField()` takes the same shape back and validates every key, Token, Decimal,
+Date, and Display String, so a value it rejects is one no conforming recipient would have accepted.
+
+Dictionaries are ordered entries rather than a `Map`, because RFC 9651 defines them as ordered and
+both the serialization and, for signed fields, the signature depend on that order.
+
+A field value that arrived on an HTTP message is not automatically canonical. This parser sees the
+octets it is given, so strip any surrounding whitespace the way an HTTP field line would before
+handing a value to it.
+
 ## Raw field values
 
 Supply `fieldValues` when a component needs original field occurrences, trailer values, or another

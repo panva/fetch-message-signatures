@@ -51,6 +51,8 @@ const ENTRIES = [
   { name: 'component', families: [] },
   { name: 'includesComponent', families: [] },
   { name: 'findComponents', families: [] },
+  { name: 'parseStructuredField', families: [] },
+  { name: 'serializeStructuredField', families: [] },
   { name: 'ed25519Signer', families: [] },
   { name: 'ed25519Verifier', families: [] },
 ]

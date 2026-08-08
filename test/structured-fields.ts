@@ -2,20 +2,31 @@
 // implementation. The corpus is vendored under test/fixtures/structured-field-tests. Refresh it
 // with `node --run fixtures`.
 //
-// The corpus tests a Structured Fields parser and serializer directly. This package does not export
-// one, so the corpus is driven through the surface that RFC 9421 actually reaches it from:
+// The corpus tests a Structured Fields parser and serializer directly, and this package exports
+// both, so it is driven three ways:
 //
+//   - directly, through parseStructuredField() and serializeStructuredField(),
 //   - parsing and strict re-serialization, through the `sf` component parameter, which is defined
 //     as "parse the field value, then serialize it with the strict rules", and
 //   - bare item serialization, through signature metadata parameter values and names.
 //
-// That is the behavior signature bases depend on, so a regression the corpus can detect is a
-// regression that would change a signature base.
+// The last two are the behavior signature bases depend on, so a regression the corpus can detect is
+// a regression that would change a signature base. The first covers the same engine without the RFC
+// 9421 field-line canonicalization in front of it, which is why the cases below that only a field
+// line repairs are expected to be rejected there.
 
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { component, createSignatureBase, date, displayString, token } from '../index.ts'
+import {
+  component,
+  createSignatureBase,
+  date,
+  displayString,
+  parseStructuredField,
+  serializeStructuredField,
+  token,
+} from '../index.ts'
 import type { SignatureParameterInput, SignatureParameters, StructuredFieldType } from '../index.ts'
 import { CORPUS_METADATA, PARSE_FIXTURES, SERIALISATION_FIXTURES } from './fixtures/corpus.ts'
 import { withoutUint8ArrayBase64 } from './support.ts'
@@ -176,6 +187,38 @@ describe('httpwg structured-field-tests corpus', () => {
     })
   }
 
+  describe('parsing and strict re-serialization through the exported parser', () => {
+    for (const [name, cases] of PARSE_FIXTURES) {
+      it(name, () => {
+        runDirectParseFixture(name, cases as ReadonlyArray<FixtureCase>)
+      })
+    }
+  })
+
+  it('rejects the cases only an RFC 9421 field line repairs', () => {
+    const repaired = new Map<string, FixtureCase>()
+    for (const [name, cases] of PARSE_FIXTURES) {
+      for (const fixture of cases as ReadonlyArray<FixtureCase>) {
+        const label = `${name} / ${fixture.name}`
+        if (REPAIRED_BY_FIELD_CANONICALIZATION.has(label)) {
+          repaired.set(label, fixture)
+        }
+      }
+    }
+    assert.equal(repaired.size, REPAIRED_BY_FIELD_CANONICALIZATION.size)
+
+    for (const [label, fixture] of repaired) {
+      // The exported parser sees the raw octets, so the surrounding whitespace is a syntax error.
+      assert.throws(
+        () => parseStructuredField(fixture.raw!.join(', '), fixture.header_type),
+        (error: unknown) => error instanceof TypeError,
+        label,
+      )
+      // Through a field line it parses, because RFC 9421 strips the whitespace first.
+      assert.doesNotThrow(() => canonicalize(fixture.raw!, fixture.header_type), label)
+    }
+  })
+
   describe('bare item serialization through signature metadata parameters', () => {
     for (const [name, cases] of SERIALISATION_FIXTURES) {
       it(name, () => {
@@ -196,6 +239,57 @@ describe('httpwg structured-field-tests corpus', () => {
     assert.deepEqual([...skipped].sort(), [...REPAIRED_BY_FIELD_CANONICALIZATION].sort())
   })
 })
+
+/**
+ * Runs one parse fixture file through the exported parser and serializer.
+ *
+ * Unlike the `sf` path, this receives the corpus octets exactly as written, so a case that only an
+ * RFC 9421 field line repairs is expected to be rejected here and is asserted separately.
+ */
+function runDirectParseFixture(name: string, cases: ReadonlyArray<FixtureCase>): void {
+  const failures = new Failures()
+  for (const fixture of cases) {
+    if (
+      fixture.raw === undefined ||
+      REPAIRED_BY_FIELD_CANONICALIZATION.has(`${name} / ${fixture.name}`)
+    ) {
+      continue
+    }
+
+    const expected = (fixture.canonical ?? fixture.raw).join(', ')
+    let actual: string | undefined
+    let thrown: unknown
+    try {
+      const parsed = parseStructuredField(fixture.raw.join(', '), fixture.header_type)
+      actual = serializeStructuredField(parsed, fixture.header_type)
+    } catch (error) {
+      thrown = error
+    }
+
+    if (fixture.must_fail) {
+      if (thrown === undefined) {
+        failures.record(fixture.name, `accepted ${summarize(fixture.raw)} as ${actual}`)
+      } else {
+        failures.pass()
+      }
+      continue
+    }
+    if (thrown !== undefined) {
+      if (!fixture.can_fail) {
+        failures.record(fixture.name, `rejected ${summarize(fixture.raw)}: ${thrown}`)
+      } else {
+        failures.pass()
+      }
+      continue
+    }
+    if (actual !== expected && !fixture.can_fail) {
+      failures.record(fixture.name, `expected ${summarize(expected)}, got ${summarize(actual)}`)
+    } else {
+      failures.pass()
+    }
+  }
+  failures.assert(1)
+}
 
 /** Runs one parse fixture file, returning nothing and failing the test on the first mismatch. */
 function runParseFixture(
