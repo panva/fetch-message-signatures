@@ -31,6 +31,22 @@ It matches the complete identifier, parameters included, so it distinguishes `"@
 `"@authority";req`. Use it on a covered component list about to be signed, or on the `components` of
 a parsed signature.
 
+To ask the looser question, whether a field is covered at all,
+[`findComponents()`](../docs/functions/findComponents.md) returns every identifier that resolves to
+one name:
+
+```ts
+declare const signature: FetchSig.MessageSignature
+
+const covered = FetchSig.findComponents(signature.components, 'example-dictionary')
+```
+
+It returns the identifiers rather than a boolean because covering a field is not one thing. A `key`
+parameter covers a single Dictionary member and leaves the rest of that field unprotected, `req`
+takes the value from the related request, and `bs` and `tr` change which bytes are covered. A rule
+that treats any match as "this field is protected" is weaker than it reads, so decide from the
+parameters whether the match is the one the rule meant.
+
 ## Derived components
 
 | Component               | Target   | Fetch source                                                                |

@@ -10,15 +10,17 @@ import {
   createSignatureBase,
   createVerifyingFetch,
   decimal,
+  findComponents,
   getSignatureParameter,
   getSignatures,
+  includesComponent,
   parseSignature,
   parseSignatureInput,
   sign,
   token,
   verify,
 } from '../index.ts'
-import type { VerifierFactory } from '../index.ts'
+import type { VerificationPolicy, VerifierFactory } from '../index.ts'
 import {
   REQUEST_CARRIES_FORBIDDEN_FIELDS,
   RFC_CREATED,
@@ -277,6 +279,199 @@ describe('verifier factory contract', () => {
     assert.equal(getSignatureParameter(signature, 'nonce'), undefined)
     assert.throws(() => getSignatureParameter(null as never, 'keyid'), /must be a MessageSignature/)
     assert.throws(() => getSignatureParameter(signature, 1 as never), /"name" must be a string/)
+  })
+})
+
+describe('covered component inspection', () => {
+  // Plain fields only, and no body: a browser cannot carry a forbidden field through the
+  // reconstruction that sign() performs, so a fixture that used one would not verify there.
+  async function signedRequest(
+    components: ReadonlyArray<Parameters<typeof createSignature>[1]['components'][number]>,
+  ): Promise<Request> {
+    return sign(
+      new Request('https://example.com/orders?page=1', { headers: { 'x-covered': 'value' } }),
+      { signer: webCryptoSigner(), components, parameters: { created: RFC_CREATED } },
+    )
+  }
+
+  it('matches a plain identifier and lowercases field names on both sides', () => {
+    const covered = ['@method', 'Content-Type']
+
+    assert.equal(includesComponent(covered, '@method'), true)
+    assert.equal(includesComponent(covered, 'content-type'), true)
+    assert.equal(includesComponent(covered, 'CONTENT-TYPE'), true)
+    assert.equal(includesComponent(covered, '@path'), false)
+    assert.equal(includesComponent([], '@method'), false)
+  })
+
+  it('keeps derived component names case-sensitive', () => {
+    // Only field names fold case. A derived name that arrived miscased matches nothing, and one
+    // passed in as the identifier to look for is rejected outright.
+    assert.equal(includesComponent(['@Method'], '@method'), false)
+    assert.throws(() => includesComponent(['@method'], '@Method'), /Unknown derived component/)
+  })
+
+  it('requires the complete identifier, not just the name', () => {
+    const bound = [component('@authority', { req: true })]
+
+    assert.equal(includesComponent(bound, component('@authority', { req: true })), true)
+    // Comparing names alone would call this covered.
+    assert.equal(includesComponent(bound, '@authority'), false)
+    assert.equal(includesComponent(['@authority'], component('@authority', { req: true })), false)
+  })
+
+  it('compares component parameters as an unordered set', () => {
+    const covered = [
+      component('content-type', [
+        ['key', 'member'],
+        ['req', true],
+      ]),
+    ]
+
+    assert.equal(
+      includesComponent(
+        covered,
+        component('content-type', [
+          ['req', true],
+          ['key', 'member'],
+        ]),
+      ),
+      true,
+    )
+    assert.equal(includesComponent(covered, component('content-type', { key: 'member' })), false)
+  })
+
+  it('reads the covered components of a parsed signature', async () => {
+    const signed = await signedRequest(['@method', 'x-covered'])
+    const { components } = getSignatures(signed)[0]!
+
+    assert.equal(includesComponent(components, '@method'), true)
+    assert.equal(includesComponent(components, 'x-covered'), true)
+    assert.equal(includesComponent(components, 'x-uncovered'), false)
+  })
+
+  it('finds every parameterization of one field name', () => {
+    const covered = [
+      '@method',
+      component('example-dict', { key: 'a' }),
+      component('example-dict', { key: 'b' }),
+      'content-type',
+    ]
+
+    assert.deepEqual(
+      findComponents(covered, 'example-dict').map(({ parameters }) => parameters),
+      [[['key', 'a']], [['key', 'b']]],
+    )
+    assert.deepEqual(findComponents(covered, '@method'), [{ name: '@method', parameters: [] }])
+    assert.deepEqual(findComponents(covered, 'date'), [])
+    assert.deepEqual(findComponents([], '@method'), [])
+  })
+
+  it('finds a keyed identifier that includesComponent does not', () => {
+    const covered = [component('content-type', { key: 'sig1' })]
+
+    // The pair that motivates both helpers: one list, two different questions.
+    assert.equal(includesComponent(covered, 'content-type'), false)
+    assert.equal(findComponents(covered, 'content-type').length, 1)
+  })
+
+  it('reports how a field was covered, not only that it was', async () => {
+    const signed = await sign(
+      new Request('https://example.com/', { headers: { 'x-dict': 'a=1, b=2' } }),
+      {
+        signer: webCryptoSigner(),
+        components: [component('x-dict', { key: 'a' }), '@authority'],
+        parameters: { created: RFC_CREATED },
+        structuredFields: { 'x-dict': 'dictionary' },
+      },
+    )
+    const [covered] = findComponents(getSignatures(signed)[0]!.components, 'x-dict')
+
+    assert.ok(covered)
+    // The parameter is what tells a caller only one dictionary member is bound.
+    assert.deepEqual(covered.parameters, [['key', 'a']])
+    assert.equal(includesComponent([covered], component('x-dict', { key: 'a' })), true)
+    assert.equal(includesComponent([covered], 'x-dict'), false)
+  })
+
+  it('reports a result for an identifier that arrived on the wire rather than throwing', () => {
+    // A peer controls its own Signature-Input, so a lookup against one must not reject the list.
+    // Neither of these names is one a covered component list may carry.
+    const hostile = [{ name: '@signature-params', parameters: [] }, { name: '@bogus' }, 'X-Upper']
+
+    assert.equal(includesComponent(hostile, '@method'), false)
+    assert.equal(includesComponent(hostile, 'x-upper'), true)
+    assert.deepEqual(findComponents(hostile, '@method'), [])
+  })
+
+  it('rejects an invalid identifier to look for, and an invalid list', () => {
+    for (const lookup of [includesComponent, findComponents] as Array<
+      (components: ReadonlyArray<string>, name: never) => unknown
+    >) {
+      assert.throws(() => lookup(['@method'], '@signature-params' as never), {
+        name: 'TypeError',
+        message: '"@signature-params" cannot be listed as a covered component',
+      })
+      assert.throws(() => lookup(['@method'], '@bogus' as never), /@bogus/)
+      assert.throws(() => lookup('@method' as never, '@method' as never), {
+        name: 'TypeError',
+        message: '"components" must be an array',
+      })
+    }
+
+    assert.throws(() => includesComponent(['@method'], 1 as never), {
+      name: 'TypeError',
+      message: 'Invalid HTTP message component identifier',
+    })
+    assert.throws(() => findComponents(['@method'], 1 as never), {
+      name: 'TypeError',
+      message: '"name" must be a string',
+    })
+  })
+
+  it('expresses coverage rules that requiredComponents cannot', async () => {
+    const signed = await signedRequest(['@method', '@authority', 'x-covered'])
+    const policy = (validate: VerificationPolicy['validate']): VerificationPolicy =>
+      verificationPolicy({ validate })
+
+    // Either-or: requiredComponents is a conjunction, so this has to live in validate.
+    const eitherOr = policy((signature) => {
+      if (
+        !includesComponent(signature.components, '@authority') &&
+        !includesComponent(signature.components, '@target-uri')
+      ) {
+        throw new Error('The signature must cover @authority or @target-uri')
+      }
+    })
+    await assert.doesNotReject(verify(signed, { verifier: webCryptoVerifier(), policy: eitherOr }))
+
+    // Conditional on the message, and name-level rather than identifier-level.
+    const requireCoverageWhenPresent = (field: string): VerificationPolicy =>
+      policy((signature, context) => {
+        if (
+          context.message.headers.has(field) &&
+          findComponents(signature.components, field).length === 0
+        ) {
+          throw new Error(`A present ${field} field must be covered`)
+        }
+      })
+
+    await assert.doesNotReject(
+      verify(signed, {
+        verifier: webCryptoVerifier(),
+        policy: requireCoverageWhenPresent('x-covered'),
+      }),
+    )
+    const withUncovered = new Request(signed, {
+      headers: new Headers([...signed.headers, ['x-extra', 'added']]),
+    })
+    await assert.rejects(
+      verify(withUncovered, {
+        verifier: webCryptoVerifier(),
+        policy: requireCoverageWhenPresent('x-extra'),
+      }),
+      /A present x-extra field must be covered/,
+    )
   })
 })
 

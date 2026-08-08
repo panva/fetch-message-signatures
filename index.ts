@@ -2214,6 +2214,74 @@ export function includesComponent(
 }
 
 /**
+ * Returns every component identifier in a list that resolves to one field or derived component
+ * name, whatever parameters it carries.
+ *
+ * This answers "is this field covered at all", which {@link includesComponent} deliberately does
+ * not: that function matches the complete identifier, so it does not find `"example-dict";key="a"`
+ * when asked for `"example-dict"`. The identifiers come back so that a caller can see how the field
+ * was covered rather than only that it was.
+ *
+ * Reading the parameters matters, because covering a field is not one thing:
+ *
+ * - `key` covers **one member** of a Structured Field Dictionary. The other members of that field are
+ *   not covered, so a peer can add, remove, or change them without breaking the signature.
+ * - `req` covers the value from the related request rather than from the response.
+ * - `bs` and `tr` change which bytes and which section the value is taken from.
+ *
+ * A coverage rule that treats any match as "the field is protected" is therefore weaker than it
+ * reads. Decide from the parameters whether the match is the one the rule meant.
+ *
+ * The list is not required to be a valid covered component list, so an identifier that arrived on
+ * the wire is matched rather than rejected. The name comes from the application and is validated.
+ *
+ * @example
+ *
+ * A conditional coverage rule, written so that a keyed identifier does not silently satisfy a rule
+ * about the whole field.
+ *
+ * ```ts
+ * declare const signature: FetchSig.MessageSignature
+ * declare const message: Request
+ *
+ * if (message.headers.has('signature-agent')) {
+ *   const covered = FetchSig.findComponents(signature.components, 'signature-agent')
+ *   if (covered.length === 0) {
+ *     throw new Error('An unsigned signature-agent field is not accepted')
+ *   }
+ *   // Accept a single dictionary member only when the rule is about that member.
+ *   if (covered.every(({ parameters }) => parameters.some(([name]) => name === 'key'))) {
+ *     throw new Error('signature-agent must be covered as a whole field')
+ *   }
+ * }
+ * ```
+ *
+ * @param components - Identifiers to search, such as {@link MessageSignature.components} or a
+ *   covered component list an application is about to sign.
+ * @param name - A field name, matched case-insensitively, or a case-sensitive derived component
+ *   name.
+ *
+ * @returns The matching identifiers in list order, normalized, or an empty array.
+ * @group Components and Structured Fields
+ */
+export function findComponents(
+  components: ReadonlyArray<ComponentIdentifier>,
+  name: string,
+): MessageComponent[] {
+  if (!Array.isArray(components)) {
+    fail('"components" must be an array')
+  }
+  if (typeof name !== 'string') {
+    fail('"name" must be a string')
+  }
+  const wanted = toMessageComponent(name)
+  validateComponentName(wanted)
+  return components
+    .map((candidate) => toMessageComponent(candidate))
+    .filter((candidate) => candidate.name === wanted.name)
+}
+
+/**
  * Normalizes the two accepted parameter inputs, an ordered array of tuples or a plain object, into
  * an ordered array of entries.
  *

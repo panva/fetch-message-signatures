@@ -106,12 +106,20 @@ const requireTargetBinding: FetchSig.VerificationPolicy['validate'] = (signature
 ```
 
 Comparing `component.name` by hand instead would accept `"@authority";req` for a rule that means
-`"@authority"`. `requiredParameters` checks presence only. `algorithms` must be a non-empty array of
-non-empty strings and is checked against the trusted verifier's algorithm, whether or not the
-signature carries `alg`. Verification also fails when a signature's `alg` disagrees with the
-algorithm the verifier factory selected. All three arrays are required, and either of the first two
-may be empty. The policy shape is validated before any message is processed, so
-`createVerifyingFetch()` and `createSignedFetch()` reject an invalid policy when they are created.
+`"@authority"`.
+
+The `signature-agent` rule above is the other shape, because it asks whether a field is bound at
+all. [`findComponents()`](../docs/functions/findComponents.md) matches a name whatever parameters it
+carries, which `includesComponent()` deliberately does not, and returns the identifiers it found.
+Read their parameters before concluding the field is protected: a `key` parameter covers one
+Dictionary member and leaves that field's other members free to change in transit.
+
+`requiredParameters` checks presence only. `algorithms` must be a non-empty array of non-empty
+strings and is checked against the trusted verifier's algorithm, whether or not the signature
+carries `alg`. Verification also fails when a signature's `alg` disagrees with the algorithm the
+verifier factory selected. All three arrays are required, and either of the first two may be empty.
+The policy shape is validated before any message is processed, so `createVerifyingFetch()` and
+`createSignedFetch()` reject an invalid policy when they are created.
 
 Timestamp checks work as follows:
 
