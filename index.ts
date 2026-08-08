@@ -4,8 +4,8 @@
  * Implements the sender, recipient, and `Accept-Signature` operations from [RFC
  * 9421](https://www.rfc-editor.org/info/rfc9421/) on top of `Request`, `Response`, `Headers`, and
  * `fetch`. The module constructs and parses the required Structured Fields, includes Web
- * Cryptography implementations of the ECDSA and Ed25519 signature algorithms, and supports custom
- * cryptographic providers.
+ * Cryptography implementations of the ECDSA, Ed25519, and RSA signature algorithms, and supports
+ * custom cryptographic providers.
  *
  * @module fetch-message-signatures
  * @example
@@ -465,8 +465,8 @@ function fail(message: string): never {
 
 type AlgorithmKeyType = 'private' | 'public'
 type SignatureKeyUsage = 'sign' | 'verify'
-type WebCryptoSignatureAlgorithm = AlgorithmIdentifier | EcdsaParams
-type WebCryptoKeyGenerationAlgorithm = AlgorithmIdentifier | EcKeyGenParams
+type WebCryptoSignatureAlgorithm = AlgorithmIdentifier | EcdsaParams | RsaPssParams
+type WebCryptoKeyGenerationAlgorithm = AlgorithmIdentifier | EcKeyGenParams | RsaHashedKeyGenParams
 
 interface AlgorithmKeyExpectation {
   readonly identifier: string
@@ -474,6 +474,7 @@ interface AlgorithmKeyExpectation {
   readonly usage: SignatureKeyUsage
   readonly algorithm: string
   readonly namedCurve?: string
+  readonly hash?: string
 }
 
 /**
@@ -491,6 +492,23 @@ function resolveExtractableOption(extractable: boolean | undefined): boolean {
 }
 
 /**
+ * Validates the optional `modulusLength` argument of an RSA key-pair generator and applies its
+ * 2048-bit default.
+ *
+ * Which lengths are actually supported is left to the Web Cryptography implementation, which
+ * rejects the ones it cannot generate.
+ */
+function resolveModulusLengthOption(modulusLength: number | undefined): number {
+  if (modulusLength === undefined) {
+    return 2048
+  }
+  if (typeof modulusLength !== 'number' || !Number.isInteger(modulusLength) || modulusLength <= 0) {
+    fail('"modulusLength" must be a positive integer')
+  }
+  return modulusLength
+}
+
+/**
  * Reads a property from a value that is not known to be an object, returning `undefined` instead of
  * throwing when it is not.
  *
@@ -504,8 +522,13 @@ function readProperty(value: unknown, property: string): unknown {
 }
 
 /**
- * Reports whether a `CryptoKey` matches the type, usage, Web Cryptography algorithm, and named
- * curve required by one RFC 9421 algorithm identifier.
+ * Reports whether a `CryptoKey` matches the type, usage, Web Cryptography algorithm, named curve,
+ * and digest required by one RFC 9421 algorithm identifier.
+ *
+ * The digest is part of the identifier for the RSA algorithms, and a `CryptoKey` binds it at import
+ * or generation time. An RSA-PSS key created for SHA-256 is therefore rejected by the
+ * `rsa-pss-sha512` factories rather than used to produce a signature that names a digest it was not
+ * computed with.
  */
 function isAlgorithmKey(key: CryptoKey, expected: AlgorithmKeyExpectation): boolean {
   if (key === null || typeof key !== 'object') {
@@ -521,9 +544,15 @@ function isAlgorithmKey(key: CryptoKey, expected: AlgorithmKeyExpectation): bool
   ) {
     return false
   }
+  if (
+    expected.namedCurve !== undefined &&
+    readProperty(algorithm, 'namedCurve') !== expected.namedCurve
+  ) {
+    return false
+  }
   return (
-    expected.namedCurve === undefined ||
-    readProperty(algorithm, 'namedCurve') === expected.namedCurve
+    expected.hash === undefined ||
+    readProperty(readProperty(algorithm, 'hash'), 'name') === expected.hash
   )
 }
 
@@ -845,6 +874,186 @@ export function ed25519Verifier(key: CryptoKey): SynchronousVerifierFactory {
     key,
     { identifier: 'ed25519', type: 'public', usage: 'verify', algorithm: 'Ed25519' },
     'Ed25519',
+  )
+}
+
+/**
+ * Generates an RSA key pair for the RFC 9421 `rsa-pss-sha512` algorithm.
+ *
+ * The generated public key is represented by Web Cryptography's `CryptoKey` and is always
+ * extractable. RSA keys usually come from existing key management rather than from this generator,
+ * and {@link rsaPssSha512Signer} and {@link rsaPssSha512Verifier} accept an RSA-PSS key of any
+ * modulus length.
+ *
+ * SHA-512 with a 64-byte salt needs at least a 1040-bit modulus to encode a signature at all, so a
+ * shorter key fails when it is used rather than when it is generated.
+ *
+ * @example
+ *
+ * Generate a pair and turn it into the sender and recipient providers.
+ *
+ * ```ts
+ * const { privateKey, publicKey } = await FetchSig.generateRsaPssSha512KeyPair()
+ *
+ * const signer = FetchSig.rsaPssSha512Signer(privateKey)
+ * const verifier = FetchSig.rsaPssSha512Verifier(publicKey)
+ *
+ * // A longer modulus, when the surrounding key policy calls for one.
+ * const strong = await FetchSig.generateRsaPssSha512KeyPair(false, 4096)
+ * ```
+ *
+ * @param extractable - Whether the private key can be exported. Defaults to `false`.
+ * @param modulusLength - Modulus length in bits. Defaults to `2048`.
+ *
+ * @returns A randomly generated signing and verification key pair.
+ * @group Cryptographic Algorithms
+ */
+export async function generateRsaPssSha512KeyPair(
+  extractable?: boolean,
+  modulusLength?: number,
+): Promise<CryptoKeyPair> {
+  return generateWebCryptoKeyPair(
+    {
+      name: 'RSA-PSS',
+      modulusLength: resolveModulusLengthOption(modulusLength),
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-512',
+    },
+    extractable,
+  )
+}
+
+/**
+ * Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `rsa-pss-sha512`.
+ *
+ * Signatures use MGF1 with SHA-512 and the RFC-required 64-byte salt. The salt length is not
+ * carried by the key, so a provider that leaves it at another value produces signatures no
+ * conforming recipient accepts.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an RSA-PSS private key with SHA-512 and `sign`
+ *   usage.
+ * @group Cryptographic Algorithms
+ */
+export function rsaPssSha512Signer(key: CryptoKey): SignerFactory {
+  return createWebCryptoSignerFactory(
+    key,
+    {
+      identifier: 'rsa-pss-sha512',
+      type: 'private',
+      usage: 'sign',
+      algorithm: 'RSA-PSS',
+      hash: 'SHA-512',
+    },
+    { name: 'RSA-PSS', saltLength: 64 },
+  )
+}
+
+/**
+ * Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `rsa-pss-sha512`.
+ *
+ * Signatures use MGF1 with SHA-512 and the RFC-required 64-byte salt. This fixed-key factory does
+ * not perform `keyid` lookup or authorization. Select it from trusted application configuration
+ * when more than one verification key can be used.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an RSA-PSS public key with SHA-512 and `verify`
+ *   usage.
+ * @group Cryptographic Algorithms
+ */
+export function rsaPssSha512Verifier(key: CryptoKey): SynchronousVerifierFactory {
+  return createWebCryptoVerifierFactory(
+    key,
+    {
+      identifier: 'rsa-pss-sha512',
+      type: 'public',
+      usage: 'verify',
+      algorithm: 'RSA-PSS',
+      hash: 'SHA-512',
+    },
+    { name: 'RSA-PSS', saltLength: 64 },
+  )
+}
+
+/**
+ * Generates an RSA key pair for the RFC 9421 `rsa-v1_5-sha256` algorithm.
+ *
+ * The generated public key is represented by Web Cryptography's `CryptoKey` and is always
+ * extractable. RSA keys usually come from existing key management rather than from this generator,
+ * and {@link rsaV1_5Sha256Signer} and {@link rsaV1_5Sha256Verifier} accept an RSASSA-PKCS1-v1_5 key
+ * of any modulus length.
+ *
+ * Prefer `rsa-pss-sha512` or `ed25519` for a new design. This algorithm is provided for peers that
+ * require PKCS#1 v1.5, which RFC 9421 describes as the weaker RSA option.
+ *
+ * @param extractable - Whether the private key can be exported. Defaults to `false`.
+ * @param modulusLength - Modulus length in bits. Defaults to `2048`.
+ *
+ * @returns A randomly generated signing and verification key pair.
+ * @group Cryptographic Algorithms
+ */
+export async function generateRsaV1_5Sha256KeyPair(
+  extractable?: boolean,
+  modulusLength?: number,
+): Promise<CryptoKeyPair> {
+  return generateWebCryptoKeyPair(
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      modulusLength: resolveModulusLengthOption(modulusLength),
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
+    extractable,
+  )
+}
+
+/**
+ * Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `rsa-v1_5-sha256`.
+ *
+ * Prefer {@link rsaPssSha512Signer} or {@link ed25519Signer} for a new design. This algorithm is
+ * provided for peers that require PKCS#1 v1.5, which RFC 9421 describes as the weaker RSA option.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an RSASSA-PKCS1-v1_5 private key with SHA-256 and
+ *   `sign` usage.
+ * @group Cryptographic Algorithms
+ */
+export function rsaV1_5Sha256Signer(key: CryptoKey): SignerFactory {
+  return createWebCryptoSignerFactory(
+    key,
+    {
+      identifier: 'rsa-v1_5-sha256',
+      type: 'private',
+      usage: 'sign',
+      algorithm: 'RSASSA-PKCS1-v1_5',
+      hash: 'SHA-256',
+    },
+    'RSASSA-PKCS1-v1_5',
+  )
+}
+
+/**
+ * Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `rsa-v1_5-sha256`.
+ *
+ * This fixed-key factory does not perform `keyid` lookup or authorization. Select it from trusted
+ * application configuration when more than one verification key can be used.
+ *
+ * Accept this algorithm only for peers that require PKCS#1 v1.5, and keep it out of the policy
+ * allowlist everywhere else. RFC 9421 describes it as the weaker RSA option and warns about
+ * {@link https://www.rfc-editor.org/info/rfc9421/#section-7.3.6 | algorithm downgrade attacks}.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an RSASSA-PKCS1-v1_5 public key with SHA-256 and
+ *   `verify` usage.
+ * @group Cryptographic Algorithms
+ */
+export function rsaV1_5Sha256Verifier(key: CryptoKey): SynchronousVerifierFactory {
+  return createWebCryptoVerifierFactory(
+    key,
+    {
+      identifier: 'rsa-v1_5-sha256',
+      type: 'public',
+      usage: 'verify',
+      algorithm: 'RSASSA-PKCS1-v1_5',
+      hash: 'SHA-256',
+    },
+    'RSASSA-PKCS1-v1_5',
   )
 }
 

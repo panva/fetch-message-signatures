@@ -5,8 +5,9 @@ on the Fetch API.
 
 The module provides sender, recipient, and `Accept-Signature` operations on top of `Request`,
 `Response`, `Headers`, and `fetch`, together with Web Cryptography implementations for ECDSA P-256,
-ECDSA P-384, and Ed25519. RSA, HMAC, and other cryptography can be supplied through custom
-providers. Trusted-key selection and authorization remain application responsibilities.
+ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and RSASSA-PKCS1-v1_5 with SHA-256. HMAC and other
+cryptography can be supplied through custom providers. Trusted-key selection and authorization
+remain application responsibilities.
 
 ## [💗 Help the project](https://github.com/sponsors/panva)
 
@@ -113,7 +114,7 @@ repeated field lines, trailers, and response reconstruction, is documented in
 - Sign requests and responses.
 - Verify one or more message signatures against explicit recipient policy.
 - Generate key pairs containing Web Cryptography's `CryptoKey` objects and providers for ECDSA
-  P-256, ECDSA P-384, and Ed25519.
+  P-256, ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and RSASSA-PKCS1-v1_5 with SHA-256.
 - Bind a response signature to components of its related request.
 - Create, parse, append, and fulfill `Accept-Signature` requests.
 - Derive RFC 9421 request and response components from Fetch messages.
@@ -124,8 +125,9 @@ repeated field lines, trailers, and response reconstruction, is documented in
 ## Cryptographic Algorithms
 
 `fetch-message-signatures` includes tree-shakeable key-pair generators, signer factories, and
-verifier factories backed by Web Cryptography for ECDSA P-256, ECDSA P-384, and Ed25519. Other
-algorithms and key systems can be supplied through the [`Signer`](docs/interfaces/Signer.md) and
+verifier factories backed by Web Cryptography for `ecdsa-p256-sha256`, `ecdsa-p384-sha384`,
+`ed25519`, `rsa-pss-sha512`, and `rsa-v1_5-sha256`. Other algorithm identifiers and key systems,
+including `hmac-sha256`, can be supplied through the [`Signer`](docs/interfaces/Signer.md) and
 [`Verifier`](docs/interfaces/Verifier.md) interfaces. Applications choose trusted keys, algorithms,
 and authorization policy.
 

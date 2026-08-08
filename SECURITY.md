@@ -40,9 +40,9 @@ base is derived from, including the related request. It does not cover message b
 package never reads.
 
 The package provides key-pair generators and signer/verifier adapters backed by Web Cryptography for
-ECDSA P-256, ECDSA P-384, and Ed25519. It does not provide persistent key management, trust anchors,
-key discovery, authorization rules, replay storage, body digest verification, HTTP transport
-security, or confidentiality.
+ECDSA P-256, ECDSA P-384, Ed25519, and RSA. It does not provide persistent key management, trust
+anchors, key discovery, authorization rules, replay storage, body digest verification, HTTP
+transport security, or confidentiality.
 
 Before verification, signature labels, parameters such as `keyid` and `alg`, covered component
 identifiers, and all message values are untrusted. Signature labels are unsigned dictionary keys.

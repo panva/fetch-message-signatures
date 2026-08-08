@@ -8,6 +8,7 @@ import {
   ecdsaP256Sha256Verifier,
   ed25519Signer as createEd25519Signer,
   ed25519Verifier as createEd25519Verifier,
+  rsaPssSha512Verifier,
   verify,
   type SignerFactory,
   type VerifierFactory,
@@ -104,20 +105,15 @@ const clientCert = [
   'Q6bMjeSkC3dFCOOB8TAiEAx/kHSB4urmiZ0NX5r5XarmPk0wmuydBVoU4hBVZ1yhk=:',
 ].join('')
 
-const rsaPssKey = await crypto.subtle.importKey(
-  'spki',
-  rsaPssPublicKey,
-  { name: 'RSA-PSS', hash: 'SHA-512' },
-  false,
-  ['verify'],
+const rsaPssVerifier = rsaPssSha512Verifier(
+  await crypto.subtle.importKey(
+    'spki',
+    rsaPssPublicKey,
+    { name: 'RSA-PSS', hash: 'SHA-512' },
+    false,
+    ['verify'],
+  ),
 )
-const rsaPssVerifier: VerifierFactory = () => ({
-  type: 'verifier',
-  alg: 'rsa-pss-sha512',
-  async verify(data, signature) {
-    return crypto.subtle.verify({ name: 'RSA-PSS', saltLength: 64 }, rsaPssKey, signature, data)
-  },
-})
 
 const p256Verifier = ecdsaP256Sha256Verifier(
   await crypto.subtle.importKey(
