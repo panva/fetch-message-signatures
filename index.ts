@@ -2124,6 +2124,85 @@ export function component(
 }
 
 /**
+ * Reports whether a list of component identifiers contains one particular identifier.
+ *
+ * Both sides are normalized first, so a string and the equivalent {@link component} call match, HTTP
+ * field names compare case-insensitively, and component parameters are compared as an unordered
+ * set. The complete identifier has to match: `"@authority"` and `FetchSig.component('@authority',
+ * {req: true})` are different components, and only the exact one is found.
+ *
+ * The list is not required to be a valid covered component list, so an identifier that arrived on
+ * the wire returns `false` rather than throwing. The identifier being looked for comes from the
+ * application and is validated.
+ *
+ * Use this in a {@link VerificationPolicy.validate} callback for a coverage rule
+ * {@link VerificationPolicy.requiredComponents} cannot express, such as requiring one of two
+ * components or requiring a component only when the message carries a particular field. Comparing
+ * names alone would treat `"@authority"` and `"@authority";req` as the same component.
+ *
+ * @example
+ *
+ * A rule that `requiredComponents` cannot express: the signature must bind the request target
+ * through either `@authority` or `@target-uri`.
+ *
+ * ```ts
+ * declare const request: Request
+ * declare const verifier: FetchSig.VerifierFactory
+ *
+ * await FetchSig.verify(request, {
+ *   verifier,
+ *   policy: {
+ *     requiredComponents: ['@method', '@path'],
+ *     requiredParameters: ['created', 'keyid'],
+ *     algorithms: ['ed25519'],
+ *     validate(signature) {
+ *       const covered = signature.components
+ *       if (
+ *         !FetchSig.includesComponent(covered, '@authority') &&
+ *         !FetchSig.includesComponent(covered, '@target-uri')
+ *       ) {
+ *         throw new Error('The signature must cover @authority or @target-uri')
+ *       }
+ *     },
+ *   },
+ * })
+ * ```
+ *
+ * @example
+ *
+ * A conditional rule: whenever the message carries a `signature-agent` field, the signature has to
+ * cover it, so that the field cannot be added or changed in transit.
+ *
+ * ```ts
+ * declare const signature: FetchSig.MessageSignature
+ * declare const message: Request
+ *
+ * if (
+ *   message.headers.has('signature-agent') &&
+ *   !FetchSig.includesComponent(signature.components, 'signature-agent')
+ * ) {
+ *   throw new Error('An unsigned signature-agent field is not accepted')
+ * }
+ * ```
+ *
+ * @param components - Identifiers to search, such as {@link MessageSignature.components} or a
+ *   covered component list an application is about to sign.
+ * @param component - The identifier to look for.
+ * @group Components and Structured Fields
+ */
+export function includesComponent(
+  components: ReadonlyArray<ComponentIdentifier>,
+  component: ComponentIdentifier,
+): boolean {
+  if (!Array.isArray(components)) {
+    fail('"components" must be an array')
+  }
+  const wanted = toMessageComponent(component)
+  validateComponentName(wanted)
+  return components.some((candidate) => sameComponent(wanted, toMessageComponent(candidate)))
+}
+
+/**
  * Normalizes the two accepted parameter inputs, an ordered array of tuples or a plain object, into
  * an ordered array of entries.
  *
@@ -2409,38 +2488,46 @@ function componentToSfItem(identifier: MessageComponent): SfItem {
 }
 
 /**
- * Converts the covered component identifiers supplied by an application into normalized identifiers
- * with ordered parameters.
+ * Converts one component identifier supplied by an application into its normalized form.
  *
  * HTTP field names are lowercased, as RFC 9421 requires. Derived component names are left alone
- * because they are case-sensitive.
+ * because they are case-sensitive. The name itself is not checked here, so that a comparison
+ * against an identifier that arrived on the wire does not have to reject it first.
+ */
+function toMessageComponent(input: ComponentIdentifier): MessageComponent {
+  let name: string
+  let parameters: ComponentParameters | undefined
+  if (typeof input === 'string') {
+    name = input
+  } else if (input !== null && typeof input === 'object' && typeof input.name === 'string') {
+    name = input.name
+    parameters = input.parameters
+  } else {
+    return fail('Invalid HTTP message component identifier')
+  }
+
+  if (!name.startsWith('@')) {
+    name = name.toLowerCase()
+  }
+  return {
+    name,
+    parameters: normalizeComponentParameters(parameters).map(([parameterName, value]) => [
+      parameterName,
+      componentParameterFromSfBareItem(value),
+    ]),
+  }
+}
+
+/**
+ * Converts the covered component identifiers supplied by an application into normalized identifiers
+ * with ordered parameters, rejecting any name a covered component list cannot carry.
  */
 function normalizeComponents(components: ReadonlyArray<ComponentIdentifier>): MessageComponent[] {
   if (!Array.isArray(components)) {
     fail('"components" must be an array')
   }
   return components.map((input) => {
-    let name: string
-    let parameters: ComponentParameters | undefined
-    if (typeof input === 'string') {
-      name = input
-    } else if (input !== null && typeof input === 'object' && typeof input.name === 'string') {
-      name = input.name
-      parameters = input.parameters
-    } else {
-      return fail('Invalid HTTP message component identifier')
-    }
-
-    if (!name.startsWith('@')) {
-      name = name.toLowerCase()
-    }
-    const normalized: MessageComponent = {
-      name,
-      parameters: normalizeComponentParameters(parameters).map(([parameterName, value]) => [
-        parameterName,
-        componentParameterFromSfBareItem(value),
-      ]),
-    }
+    const normalized = toMessageComponent(input)
     validateComponentName(normalized)
     return normalized
   })

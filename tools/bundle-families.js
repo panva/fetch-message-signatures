@@ -48,6 +48,7 @@ const ENTRIES = [
   { name: 'getSignatureParameter', families: [] },
   { name: 'createSignatureBase', families: [] },
   { name: 'component', families: [] },
+  { name: 'includesComponent', families: [] },
   { name: 'ed25519Signer', families: [] },
   { name: 'ed25519Verifier', families: [] },
 ]

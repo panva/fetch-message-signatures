@@ -16,6 +16,7 @@ import {
   displayString,
   getSignatureRequests,
   getSignatures,
+  includesComponent,
   parseSignature,
   parseSignatureInput,
   sign,
@@ -1638,6 +1639,119 @@ describe('recipient inspection', () => {
     await assert.rejects(
       verify(signed, { verifier: webCryptoVerifier(), policy: policy('invoices') }),
       /Unexpected signature tag "orders"/,
+    )
+  })
+})
+
+describe('covered component lookup', () => {
+  it('matches a plain identifier and lowercases field names on both sides', () => {
+    const covered = ['@method', 'X-Covered']
+
+    assert.equal(includesComponent(covered, '@method'), true)
+    assert.equal(includesComponent(covered, 'x-covered'), true)
+    assert.equal(includesComponent(covered, 'X-COVERED'), true)
+    assert.equal(includesComponent(covered, '@path'), false)
+    assert.equal(includesComponent([], '@method'), false)
+  })
+
+  it('keeps derived component names case-sensitive', () => {
+    // Only field names fold case. A derived name that arrived miscased matches nothing, and one
+    // passed in as the identifier to look for is rejected outright.
+    assert.equal(includesComponent(['@Method'], '@method'), false)
+    assert.throws(() => includesComponent(['@method'], '@Method'), /Unknown derived component/)
+  })
+
+  it('requires the complete identifier, not just the name', () => {
+    const bound = [component('@authority', { req: true })]
+
+    assert.equal(includesComponent(bound, component('@authority', { req: true })), true)
+    // The whole point of the helper: comparing names alone would call this covered.
+    assert.equal(includesComponent(bound, '@authority'), false)
+    assert.equal(includesComponent(['@authority'], component('@authority', { req: true })), false)
+  })
+
+  it('compares component parameters as an unordered set', () => {
+    const covered = [
+      component('example-dictionary', [
+        ['key', 'member'],
+        ['req', true],
+      ]),
+    ]
+
+    assert.equal(
+      includesComponent(
+        covered,
+        component('example-dictionary', [
+          ['req', true],
+          ['key', 'member'],
+        ]),
+      ),
+      true,
+    )
+    assert.equal(
+      includesComponent(covered, component('example-dictionary', { key: 'member' })),
+      false,
+    )
+    assert.equal(
+      includesComponent(covered, component('example-dictionary', { key: 'other', req: true })),
+      false,
+    )
+  })
+
+  it('reads the covered components of a parsed signature', async () => {
+    const signed = await signedFixture()
+    const { components } = getSignatures(signed)[0]!
+
+    assert.equal(includesComponent(components, '@method'), true)
+    assert.equal(includesComponent(components, 'x-covered'), true)
+    assert.equal(includesComponent(components, 'x-uncovered'), false)
+  })
+
+  it('does not throw for an identifier that arrived on the wire', () => {
+    // A peer controls its own Signature-Input, so a lookup against one must report a result rather
+    // than reject the list. Neither of these names is one a covered component list may carry.
+    const hostile = [{ name: '@signature-params', parameters: [] }, { name: '@bogus' }, 'X-Upper']
+
+    assert.equal(includesComponent(hostile, '@method'), false)
+    assert.equal(includesComponent(hostile, 'x-upper'), true)
+  })
+
+  it('rejects an invalid identifier to look for, and an invalid list', () => {
+    assert.throws(() => includesComponent(['@method'], '@signature-params'), {
+      name: 'TypeError',
+      message: '"@signature-params" cannot be listed as a covered component',
+    })
+    assert.throws(() => includesComponent(['@method'], '@bogus'), /@bogus/)
+    assert.throws(() => includesComponent(['@method'], 1 as never), {
+      name: 'TypeError',
+      message: 'Invalid HTTP message component identifier',
+    })
+    assert.throws(() => includesComponent('@method' as never, '@method'), {
+      name: 'TypeError',
+      message: '"components" must be an array',
+    })
+  })
+
+  it('expresses an either-or coverage rule that requiredComponents cannot', async () => {
+    const signed = await signedFixture()
+    const policy = (allowed: ReadonlyArray<string>): VerificationPolicy =>
+      verificationPolicy({
+        validate(signature) {
+          if (!allowed.some((name) => includesComponent(signature.components, name))) {
+            throw new Error(`The signature covers none of ${allowed.join(', ')}`)
+          }
+        },
+      })
+
+    await assert.doesNotReject(
+      verify(signed, {
+        verifier: webCryptoVerifier(),
+        policy: policy(['@authority', '@target-uri']),
+      }),
+    )
+    await assert.rejects(
+      verify(signed, { verifier: webCryptoVerifier(), policy: policy(['@target-uri', '@query']) }),
+      /covers none of @target-uri, @query/,
     )
   })
 })

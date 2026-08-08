@@ -81,8 +81,33 @@ console.log(verified.algorithm)
 ```
 
 `requiredComponents` matches the complete component identifier, including parameters, and ignores
-parameter order. `requiredParameters` checks presence only. `algorithms` must be a non-empty array
-of non-empty strings and is checked against the trusted verifier's algorithm, whether or not the
+parameter order. Every entry must be covered, so a rule that is not a plain conjunction belongs in
+`validate`. [`includesComponent()`](../docs/functions/includesComponent.md) performs the same
+identifier match there, against `signature.components`:
+
+```ts
+declare const target: Request
+
+const requireTargetBinding: FetchSig.VerificationPolicy['validate'] = (signature) => {
+  const covered = signature.components
+  if (
+    !FetchSig.includesComponent(covered, '@authority') &&
+    !FetchSig.includesComponent(covered, '@target-uri')
+  ) {
+    throw new Error('The signature must cover @authority or @target-uri')
+  }
+  if (
+    target.headers.has('signature-agent') &&
+    !FetchSig.includesComponent(covered, 'signature-agent')
+  ) {
+    throw new Error('An unsigned signature-agent field is not accepted')
+  }
+}
+```
+
+Comparing `component.name` by hand instead would accept `"@authority";req` for a rule that means
+`"@authority"`. `requiredParameters` checks presence only. `algorithms` must be a non-empty array of
+non-empty strings and is checked against the trusted verifier's algorithm, whether or not the
 signature carries `alg`. Verification also fails when a signature's `alg` disagrees with the
 algorithm the verifier factory selected. All three arrays are required, and either of the first two
 may be empty. The policy shape is validated before any message is processed, so

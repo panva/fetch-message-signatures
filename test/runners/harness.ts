@@ -177,7 +177,11 @@ function deepEqualValue(left: unknown, right: unknown): boolean {
 }
 
 type Expectation =
-  RegExp | (new (...args: never[]) => Error) | ((error: unknown) => boolean) | undefined
+  | RegExp
+  | (new (...args: never[]) => Error)
+  | ((error: unknown) => boolean)
+  | Readonly<Record<string, unknown>>
+  | undefined
 
 /** Reports whether a function is an `Error` class, as opposed to a validation callback. */
 function isErrorClass(value: object): boolean {
@@ -201,10 +205,39 @@ function matchesExpectation(error: unknown, expected: Expectation): boolean {
   if (expected instanceof RegExp) {
     return expected.test(error instanceof Error ? error.message : String(error))
   }
+  if (typeof expected === 'object') {
+    return matchesErrorProperties(error, expected)
+  }
   if (isErrorClass(expected)) {
     return error instanceof (expected as new (...args: never[]) => Error)
   }
   return (expected as (error: unknown) => boolean)(error) === true
+}
+
+/**
+ * Compares a caught value against the object form of the expectation argument.
+ *
+ * `node:assert` checks every own property of the object, including `name` and `message`, which are
+ * not enumerable on an `Error`. A `RegExp` value tests the property instead of comparing it.
+ */
+function matchesErrorProperties(
+  error: unknown,
+  expected: Readonly<Record<string, unknown>>,
+): boolean {
+  if (error === null || (typeof error !== 'object' && typeof error !== 'function')) {
+    return false
+  }
+  for (const [key, value] of Object.entries(expected)) {
+    const actual = (error as Record<string, unknown>)[key]
+    if (value instanceof RegExp) {
+      if (!value.test(String(actual))) {
+        return false
+      }
+    } else if (!deepEqualValue(value, actual)) {
+      return false
+    }
+  }
+  return true
 }
 
 function expectationName(expected: Expectation): string {
@@ -213,6 +246,9 @@ function expectationName(expected: Expectation): string {
   }
   if (expected instanceof RegExp) {
     return String(expected)
+  }
+  if (typeof expected === 'object') {
+    return `an error matching ${JSON.stringify(expected)}`
   }
   return isErrorClass(expected) ? expected.name : 'the expectation callback'
 }

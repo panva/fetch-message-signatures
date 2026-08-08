@@ -17,6 +17,20 @@ const components: FetchSig.ComponentIdentifier[] = [
 HTTP field names are normalized to lowercase. Derived component names begin with `@`, are
 case-sensitive, and must be one of the supported RFC 9421 components.
 
+[`includesComponent()`](../docs/functions/includesComponent.md) tests one identifier against a list
+of them, normalizing both sides the same way:
+
+```ts
+declare const components: FetchSig.ComponentIdentifier[]
+
+FetchSig.includesComponent(components, '@method') // true
+FetchSig.includesComponent(components, 'Example-Dictionary') // false, the covered one has a key
+```
+
+It matches the complete identifier, parameters included, so it distinguishes `"@authority"` from
+`"@authority";req`. Use it on a covered component list about to be signed, or on the `components` of
+a parsed signature.
+
 ## Derived components
 
 | Component               | Target   | Fetch source                                                                |
