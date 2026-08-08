@@ -3210,23 +3210,29 @@ function getTargetUri(request: Request): string {
   if (!ASCII.test(value)) {
     fail('Request target URI must contain only ASCII characters')
   }
-  // An "http" or "https" URI must not carry a userinfo subcomponent, and Node.js and browsers refuse
-  // to construct such a Request at all. Deno, Bun, and workerd allow it, which would put a password
-  // into the signature base and into anything that logs or exchanges it. Rejecting here makes every
-  // runtime behave the way the strictest ones already do.
-  if (/^[^/?#]*\/\/[^/?#]*@/.test(value)) {
-    fail('Request target URI must not include credentials')
-  }
   return value
 }
 
-/** Parses a request's target URI, reporting a message whose URI cannot be resolved. */
+/**
+ * Parses a request's target URI, reporting a message whose URI cannot be resolved.
+ *
+ * An "http" or "https" URI must not carry a userinfo subcomponent, and Node.js and browsers refuse
+ * to construct such a Request at all. Deno, Bun, and workerd allow it, which would put a password
+ * into the signature base and into anything that logs or exchanges it. Rejecting here makes every
+ * runtime behave the way the strictest ones already do. The URL parser decides what the userinfo
+ * is, so no separate grammar for it is maintained here.
+ */
 function parseTargetUri(target: string): URL {
+  let url: URL
   try {
-    return new URL(target)
+    url = new URL(target)
   } catch (cause) {
     throw new TypeError('Request does not have a valid target URI', { cause })
   }
+  if (url.username !== '' || url.password !== '') {
+    fail('Request target URI must not include credentials')
+  }
+  return url
 }
 
 /**
