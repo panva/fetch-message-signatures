@@ -6,7 +6,6 @@
 
 const fs = require('fs')
 const { execFileSync } = require('child_process')
-const { addPendingNotice } = require('./wait-for-npm.cjs')
 
 /**
  * Returns the CHANGELOG.md body for one version.
@@ -41,7 +40,7 @@ function main() {
 
   const notes = extractReleaseNotes(fs.readFileSync('CHANGELOG.md', 'utf8'), tag.replace(/^v/, ''))
 
-  fs.writeFileSync('notes.md', addPendingNotice(notes))
+  fs.writeFileSync('notes.md', notes)
   execFileSync(
     'gh',
     [
