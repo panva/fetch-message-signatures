@@ -2956,6 +2956,47 @@ function readComponentFlag(
 }
 
 /**
+ * Rejects a covered component list that the signature being created must not carry.
+ *
+ * Runs the checks the signature base would run, plus the self-coverage rules, so that a caller who
+ * serializes fields without building a base cannot produce an identifier this package's own parser
+ * rejects, nor a signature that its own appending invalidates.
+ *
+ * Covering the whole `signature` or `signature-input` field is refused because appending the new
+ * signature changes that field's value. Covering this signature's own `signature` Dictionary member
+ * is refused for a stronger reason: that member is the signature bytes being produced, so the value
+ * does not exist while the base is built and is the signature itself afterwards.
+ *
+ * The related request, the trailer section, another label's member, and this signature's own
+ * `signature-input` member are all unaffected. The last of those is self-referential but knowable
+ * in advance, because the member value is exactly the `@signature-params` line of the base being
+ * signed.
+ */
+function assertSignableComponents(
+  components: ReadonlyArray<MessageComponent>,
+  label: string,
+): void {
+  assertUniqueComponents(components)
+  for (const identifier of components) {
+    validateComponentParameters(identifier)
+    if (identifier.name !== 'signature' && identifier.name !== 'signature-input') {
+      continue
+    }
+    const componentParameters = componentParameterMap(identifier)
+    if (componentParameters.get('req') === true || componentParameters.get('tr') === true) {
+      continue
+    }
+    const key = componentParameters.get('key')
+    if (key === undefined) {
+      fail('A signature cannot cover fields to which it is being appended')
+    }
+    if (identifier.name === 'signature' && key === label) {
+      fail(`A signature cannot cover its own "signature" Dictionary member "${label}"`)
+    }
+  }
+}
+
+/**
  * Enforces the component parameters RFC 9421 allows on a given component identifier and reports
  * whether the value comes from the related request.
  *
@@ -3085,34 +3126,6 @@ function sameComponent(left: MessageComponent, right: MessageComponent): boolean
  * The second rule is enforced independently, so `"x";key="a"` and `"x";key="a";sf` are rejected
  * even though their identifiers differ.
  */
-/**
- * Rejects a covered component list that a signature must not carry.
- *
- * Runs the checks the signature base would run, plus the self-coverage rule, so that a caller who
- * serializes fields without building a base cannot produce an identifier this package's own parser
- * rejects, nor a signature that its own appending invalidates.
- *
- * Covering the whole `signature` or `signature-input` field is refused because appending the new
- * signature changes that field's value, so the signature could never verify against the message it
- * was added to. Coverage of the related request, of the trailer section, and of one dictionary
- * member are all unaffected by the append and stay allowed.
- */
-function assertSignableComponents(components: ReadonlyArray<MessageComponent>): void {
-  assertUniqueComponents(components)
-  for (const identifier of components) {
-    validateComponentParameters(identifier)
-    const componentParameters = componentParameterMap(identifier)
-    if (
-      (identifier.name === 'signature' || identifier.name === 'signature-input') &&
-      componentParameters.get('req') !== true &&
-      componentParameters.get('tr') !== true &&
-      componentParameters.get('key') === undefined
-    ) {
-      fail('A signature cannot cover fields to which it is being appended')
-    }
-  }
-}
-
 function assertUniqueComponents(components: ReadonlyArray<MessageComponent>): void {
   // Both rules are membership tests, so each component is reduced to a canonical string and checked
   // against the components already seen. Comparing every pair instead would be quadratic in the
@@ -3903,7 +3916,7 @@ export function createSignatureFields(options: SignatureFieldsOptions): Signatur
   }
 
   const components = normalizeComponents(options.components)
-  assertSignableComponents(components)
+  assertSignableComponents(components, label)
   const parameters = normalizeSignatureParameters(options.parameters, undefined)
 
   const signature = cloneBytes(options.signature)
@@ -4421,7 +4434,7 @@ async function createSignatureInternal(
   }
 
   const components = normalizeComponents(options.components)
-  assertSignableComponents(components)
+  assertSignableComponents(components, label)
   const parameters = normalizeSignatureParameters(options.parameters, unixTimestamp(options.now))
 
   const guard = createMessageMutationGuard(message, options)

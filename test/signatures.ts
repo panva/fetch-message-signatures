@@ -432,16 +432,84 @@ describe('synchronous signature field serialization', () => {
       )
     }
 
-    // Coverage unaffected by the append stays allowed in both constructors.
+    // Coverage unaffected by the append stays allowed in both constructors. The keyed case names
+    // another label, because this signature's own member is covered separately below.
     for (const identifier of [
       component('signature-input', { req: true }),
       component('signature', { tr: true }),
-      component('signature', { key: 'sig1' }),
+      component('signature', { key: 'sig0' }),
     ]) {
       assert.ok(
-        createSignatureFields({ signature: bytes, components: [identifier] }).signatureInput,
+        createSignatureFields({ signature: bytes, components: [identifier], label: 'sig1' })
+          .signatureInput,
       )
     }
+  })
+
+  it('refuses to cover the signature member it is itself producing', async () => {
+    // ";key" pins one member, but when the key is this signature's own label the member is the
+    // signature bytes: absent while the base is built, and the signature itself afterwards.
+    const own = [component('signature', { key: 'sig1' })]
+    assert.throws(
+      () => createSignatureFields({ signature: bytes, components: own, label: 'sig1' }),
+      /cannot cover its own "signature" Dictionary member "sig1"/,
+    )
+    await assert.rejects(
+      createSignature(rfcRequest(), {
+        signer: webCryptoSigner(),
+        components: own,
+        parameters: { created: RFC_CREATED },
+        label: 'sig1',
+      }),
+      /cannot cover its own "signature" Dictionary member "sig1"/,
+    )
+
+    // Another label's member, this signature's own signature-input member, and the related request
+    // or trailer section are all unaffected.
+    for (const identifier of [
+      component('signature', { key: 'sig0' }),
+      component('signature-input', { key: 'sig1' }),
+      component('signature', { key: 'sig1', req: true }),
+      component('signature', { key: 'sig1', tr: true }),
+    ]) {
+      assert.ok(
+        createSignatureFields({ signature: bytes, components: [identifier], label: 'sig1' })
+          .signatureInput,
+      )
+    }
+  })
+
+  it('round trips a signature that covers its own signature-input member', async () => {
+    // Self-referential but knowable ahead of signing: the member value is exactly the
+    // @signature-params line of the base, so the field can be set before the base is built. That is
+    // why the guard singles out "signature" rather than both fields.
+    const components = [component('signature-input', { key: 'sig1' })]
+    const parameters = [['created', RFC_CREATED]] as const
+    const probe = createSignatureFields({ signature: bytes, components, parameters, label: 'sig1' })
+
+    const request = new Request('https://example.com/', {
+      headers: { 'signature-input': probe.signatureInput },
+    })
+    const base = createSignatureBase(request, { components, parameters })
+    const fields = createSignatureFields({
+      signature: await webCryptoSigner()().sign(new TextEncoder().encode(base)),
+      components,
+      parameters,
+      label: 'sig1',
+    })
+    // appendSignature() requires both fields together, and this workflow sets Signature-Input
+    // before the bytes exist, so the final message carries the pair. Signature-Input is
+    // unchanged between the two calls, because it does not depend on the signature.
+    assert.equal(fields.signatureInput, probe.signatureInput)
+    const signed = new Request(request, {
+      headers: { 'signature-input': fields.signatureInput, signature: fields.signatureField },
+    })
+
+    const verified = await verify(signed, {
+      verifier: webCryptoVerifier(),
+      policy: verificationPolicy(),
+    })
+    assert.equal(verified.label, 'sig1')
   })
 
   it('round trips a composed signature that covers one existing dictionary member', async () => {
