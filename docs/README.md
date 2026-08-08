@@ -131,6 +131,7 @@ const order = await response.json()
 | [date](functions/date.md) | Creates a validated Structured Field Date. |
 | [decimal](functions/decimal.md) | Creates a validated Structured Field Decimal. |
 | [displayString](functions/displayString.md) | Creates a validated Structured Field Display String. |
+| [includesComponent](functions/includesComponent.md) | Reports whether a list of component identifiers contains one particular identifier. |
 | [token](functions/token.md) | Creates a validated Structured Field Token, for use as an extension signature metadata parameter value. |
 
 ## Cryptographic Algorithms
