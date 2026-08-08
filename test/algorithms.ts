@@ -22,7 +22,7 @@ import {
   verify,
   type MessageSignature,
   type SignerFactory,
-  type VerifierFactory,
+  type SynchronousVerifierFactory,
 } from '../index.ts'
 
 interface KeyMaterial {
@@ -35,7 +35,7 @@ interface AlgorithmCase {
   readonly signatureLength: number
   readonly generate: (extractable?: boolean) => Promise<KeyMaterial>
   readonly signer: (key: CryptoKey) => SignerFactory
-  readonly verifier: (key: CryptoKey) => VerifierFactory
+  readonly verifier: (key: CryptoKey) => SynchronousVerifierFactory
   readonly assertAlgorithm: (key: CryptoKey) => void
 }
 

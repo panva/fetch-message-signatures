@@ -1,6 +1,6 @@
 # Function: ecdsaP384Sha384Verifier()
 
-> **ecdsaP384Sha384Verifier**(`key`): [`VerifierFactory`](../type-aliases/VerifierFactory.md)
+> **ecdsaP384Sha384Verifier**(`key`): [`SynchronousVerifierFactory`](../type-aliases/SynchronousVerifierFactory.md)
 
 Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ecdsa-p384-sha384`.
 
@@ -16,4 +16,4 @@ when more than one verification key can be used.
 
 ## Returns
 
-[`VerifierFactory`](../type-aliases/VerifierFactory.md)
+[`SynchronousVerifierFactory`](../type-aliases/SynchronousVerifierFactory.md)

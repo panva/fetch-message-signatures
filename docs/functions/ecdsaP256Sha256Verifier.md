@@ -1,6 +1,6 @@
 # Function: ecdsaP256Sha256Verifier()
 
-> **ecdsaP256Sha256Verifier**(`key`): [`VerifierFactory`](../type-aliases/VerifierFactory.md)
+> **ecdsaP256Sha256Verifier**(`key`): [`SynchronousVerifierFactory`](../type-aliases/SynchronousVerifierFactory.md)
 
 Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ecdsa-p256-sha256`.
 
@@ -16,4 +16,4 @@ when more than one verification key can be used.
 
 ## Returns
 
-[`VerifierFactory`](../type-aliases/VerifierFactory.md)
+[`SynchronousVerifierFactory`](../type-aliases/SynchronousVerifierFactory.md)

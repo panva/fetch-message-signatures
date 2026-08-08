@@ -1,6 +1,6 @@
 # Function: ed25519Verifier()
 
-> **ed25519Verifier**(`key`): [`VerifierFactory`](../type-aliases/VerifierFactory.md)
+> **ed25519Verifier**(`key`): [`SynchronousVerifierFactory`](../type-aliases/SynchronousVerifierFactory.md)
 
 Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ed25519`.
 
@@ -16,7 +16,7 @@ configuration when more than one verification key can be used.
 
 ## Returns
 
-[`VerifierFactory`](../type-aliases/VerifierFactory.md)
+[`SynchronousVerifierFactory`](../type-aliases/SynchronousVerifierFactory.md)
 
 ## Example
 
