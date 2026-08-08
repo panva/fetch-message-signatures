@@ -2497,18 +2497,18 @@ export function component(
  *
  * @param components - Identifiers to search, such as {@link MessageSignature.components} or a
  *   covered component list an application is about to sign.
- * @param component - The identifier to look for.
+ * @param identifier - The identifier to look for.
  * @group Components
  */
 export function includesComponent(
   components: ReadonlyArray<ComponentIdentifier>,
-  component: ComponentIdentifier,
+  identifier: ComponentIdentifier,
 ): boolean {
   if (!Array.isArray(components)) {
     fail('"components" must be an array')
   }
-  const wanted = toMessageComponent(component)
-  validateComponentName(wanted)
+  const wanted = toMessageComponent(identifier)
+  validateComponentParameters(wanted)
   return components.some((candidate) => sameComponent(wanted, toMessageComponent(candidate)))
 }
 
@@ -3085,6 +3085,34 @@ function sameComponent(left: MessageComponent, right: MessageComponent): boolean
  * The second rule is enforced independently, so `"x";key="a"` and `"x";key="a";sf` are rejected
  * even though their identifiers differ.
  */
+/**
+ * Rejects a covered component list that a signature must not carry.
+ *
+ * Runs the checks the signature base would run, plus the self-coverage rule, so that a caller who
+ * serializes fields without building a base cannot produce an identifier this package's own parser
+ * rejects, nor a signature that its own appending invalidates.
+ *
+ * Covering the whole `signature` or `signature-input` field is refused because appending the new
+ * signature changes that field's value, so the signature could never verify against the message it
+ * was added to. Coverage of the related request, of the trailer section, and of one dictionary
+ * member are all unaffected by the append and stay allowed.
+ */
+function assertSignableComponents(components: ReadonlyArray<MessageComponent>): void {
+  assertUniqueComponents(components)
+  for (const identifier of components) {
+    validateComponentParameters(identifier)
+    const componentParameters = componentParameterMap(identifier)
+    if (
+      (identifier.name === 'signature' || identifier.name === 'signature-input') &&
+      componentParameters.get('req') !== true &&
+      componentParameters.get('tr') !== true &&
+      componentParameters.get('key') === undefined
+    ) {
+      fail('A signature cannot cover fields to which it is being appended')
+    }
+  }
+}
+
 function assertUniqueComponents(components: ReadonlyArray<MessageComponent>): void {
   // Both rules are membership tests, so each component is reduced to a canonical string and checked
   // against the components already seen. Comparing every pair instead would be quadratic in the
@@ -3875,7 +3903,7 @@ export function createSignatureFields(options: SignatureFieldsOptions): Signatur
   }
 
   const components = normalizeComponents(options.components)
-  assertUniqueComponents(components)
+  assertSignableComponents(components)
   const parameters = normalizeSignatureParameters(options.parameters, undefined)
 
   const signature = cloneBytes(options.signature)
@@ -4393,17 +4421,7 @@ async function createSignatureInternal(
   }
 
   const components = normalizeComponents(options.components)
-  for (const identifier of components) {
-    const componentParameters = componentParameterMap(identifier)
-    if (
-      (identifier.name === 'signature' || identifier.name === 'signature-input') &&
-      componentParameters.get('req') !== true &&
-      componentParameters.get('tr') !== true &&
-      componentParameters.get('key') === undefined
-    ) {
-      fail('A signature cannot cover fields to which it is being appended')
-    }
-  }
+  assertSignableComponents(components)
   const parameters = normalizeSignatureParameters(options.parameters, unixTimestamp(options.now))
 
   const guard = createMessageMutationGuard(message, options)

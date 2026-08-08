@@ -1,10 +1,10 @@
 # Function: includesComponent()
 
-> **includesComponent**(`components`, `component`): `boolean`
+> **includesComponent**(`components`, `identifier`): `boolean`
 
 Reports whether a list of component identifiers contains one particular identifier.
 
-Both sides are normalized first, so a string and the equivalent [component](#includescomponent) call match, HTTP
+Both sides are normalized first, so a string and the equivalent [component](component.md) call match, HTTP
 field names compare case-insensitively, and component parameters are compared as an unordered
 set. The complete identifier has to match: `"@authority"` and `FetchSig.component('@authority',
 {req: true})` are different components, and only the exact one is found.
@@ -23,7 +23,7 @@ names alone would treat `"@authority"` and `"@authority";req` as the same compon
 | Parameter | Type | Description |
 | :------ | :------ | :------ |
 | `components` | readonly [`ComponentIdentifier`](../type-aliases/ComponentIdentifier.md)\[] | Identifiers to search, such as [MessageSignature.components](../interfaces/MessageSignature.md#components) or a covered component list an application is about to sign. |
-| `component` | [`ComponentIdentifier`](../type-aliases/ComponentIdentifier.md) | The identifier to look for. |
+| `identifier` | [`ComponentIdentifier`](../type-aliases/ComponentIdentifier.md) | The identifier to look for. |
 
 ## Returns
 

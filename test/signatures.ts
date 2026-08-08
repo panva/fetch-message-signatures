@@ -21,7 +21,7 @@ import {
   token,
   verify,
 } from '../index.ts'
-import type { VerificationPolicy, VerifierFactory } from '../index.ts'
+import type { ComponentIdentifier, VerificationPolicy, VerifierFactory } from '../index.ts'
 import {
   bytesToBase64,
   REQUEST_CARRIES_FORBIDDEN_FIELDS,
@@ -393,6 +393,87 @@ describe('synchronous signature field serialization', () => {
       /@bogus/,
     )
   })
+
+  it('refuses component identifiers its own parser would reject', () => {
+    // Serializing without building a base skipped parameter validation, so these produced a
+    // Signature-Input that parseSignatureInput() and appendSignature() both threw on.
+    const invalid: ReadonlyArray<readonly [ComponentIdentifier, RegExp]> = [
+      [component('@method', { sf: true }), /Parameter "sf" does not apply to "@method"/],
+      [component('@query-param'), /"@query-param" requires a String "name" parameter/],
+      [component('@status', { req: true }), /Parameter "req" does not apply to "@status"/],
+      [component('x-covered', { wat: true }), /Unknown HTTP field component parameter "wat"/],
+      [component('x-covered', { bs: true, sf: true }), /"bs" is incompatible with "sf" and "key"/],
+      [component('x-covered', { sf: 'yes' as never }), /must be a bare Boolean true/],
+    ]
+
+    for (const [identifier, message] of invalid) {
+      assert.throws(
+        () => createSignatureFields({ signature: bytes, components: [identifier] }),
+        message,
+      )
+    }
+  })
+
+  it('refuses to cover a field the signature is about to change', async () => {
+    // Appending the new signature rewrites signature-input, so a signature over the whole field
+    // could never verify against the message it was added to.
+    for (const name of ['signature', 'signature-input']) {
+      assert.throws(
+        () => createSignatureFields({ signature: bytes, components: [name] }),
+        /cannot cover fields to which it is being appended/,
+      )
+      await assert.rejects(
+        createSignature(rfcRequest(), {
+          signer: webCryptoSigner(),
+          components: [name],
+          parameters: { created: RFC_CREATED },
+        }),
+        /cannot cover fields to which it is being appended/,
+      )
+    }
+
+    // Coverage unaffected by the append stays allowed in both constructors.
+    for (const identifier of [
+      component('signature-input', { req: true }),
+      component('signature', { tr: true }),
+      component('signature', { key: 'sig1' }),
+    ]) {
+      assert.ok(
+        createSignatureFields({ signature: bytes, components: [identifier] }).signatureInput,
+      )
+    }
+  })
+
+  it('round trips a composed signature that covers one existing dictionary member', async () => {
+    const first = await sign(
+      new Request('https://example.com/orders', { headers: { 'x-covered': 'value' } }),
+      {
+        signer: webCryptoSigner(),
+        components: ['@method', 'x-covered'],
+        parameters: { created: RFC_CREATED },
+        label: 'sig1',
+      },
+    )
+
+    // ";key" pins one member, which appending sig2 does not disturb.
+    const covered = [component('signature-input', { key: 'sig1' })]
+    const secondParameters = [['created', RFC_CREATED]] as const
+    const base = createSignatureBase(first, { components: covered, parameters: secondParameters })
+    const fields = createSignatureFields({
+      signature: new Uint8Array(await webCryptoSigner()().sign(new TextEncoder().encode(base))),
+      components: covered,
+      parameters: secondParameters,
+      label: 'sig2',
+    })
+    const appended = appendSignature(first, fields)
+
+    const verified = await verify(appended, {
+      verifier: webCryptoVerifier(),
+      policy: verificationPolicy(),
+      label: 'sig2',
+    })
+    assert.equal(verified.label, 'sig2')
+  })
 })
 
 describe('covered component inspection', () => {
@@ -515,6 +596,21 @@ describe('covered component inspection', () => {
     assert.equal(includesComponent(hostile, '@method'), false)
     assert.equal(includesComponent(hostile, 'x-upper'), true)
     assert.deepEqual(findComponents(hostile, '@method'), [])
+  })
+
+  it('rejects an identifier that is not a legal covered component', () => {
+    // The list being searched is not validated, but the identifier being looked for comes from the
+    // application and has to be one a signature could actually carry.
+    const invalid: ReadonlyArray<ComponentIdentifier> = [
+      component('@method', { sf: true }),
+      component('@query-param'),
+      component('x-covered', { wat: true }),
+      component('x-covered', { bs: true, key: 'a' }),
+    ]
+
+    for (const identifier of invalid) {
+      assert.throws(() => includesComponent([identifier], identifier), { name: 'TypeError' })
+    }
   })
 
   it('rejects an invalid identifier to look for, and an invalid list', () => {
