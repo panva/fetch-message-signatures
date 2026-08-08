@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.0.6](https://github.com/panva/fetch-message-signatures/compare/v0.0.5...v0.0.6) (2026-08-08)
+
+### Fixes
+
+* refuse to cover the signature member being produced ([deb3b1b](https://github.com/panva/fetch-message-signatures/commit/deb3b1bc109a60b7c95740d0459f3039b4ef33e0))
+* validate covered component identifiers in three entry points ([46614c1](https://github.com/panva/fetch-message-signatures/commit/46614c1b6897becbbb6eadb734c28cd8e0fef3fb))
+
+### Documentation
+
+* cover the Structured Fields exports in the README ([5d639c8](https://github.com/panva/fetch-message-signatures/commit/5d639c86d4856806f7fd0628859030e4c8032d0d))
+* lead with signing requests ([da7f180](https://github.com/panva/fetch-message-signatures/commit/da7f1808bcd250afcc26ab08449f3556355ba86b))
+* stop repeating one description per overload ([342fe49](https://github.com/panva/fetch-message-signatures/commit/342fe49270ce7194770639881e35074a1ac0b1a1))
+
 ## [0.0.5](https://github.com/panva/fetch-message-signatures/compare/v0.0.4...v0.0.5) (2026-08-08)
 
 ### Features
