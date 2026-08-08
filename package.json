@@ -49,7 +49,7 @@
     "test": "node --test --no-warnings test/*.ts",
     "test:browsers": "node test/browser.mjs",
     "test:bun": "bun test ./test/*.ts --path-ignore-patterns='test/e2e.ts'",
-    "test:deno": "deno test --unstable-no-legacy-abort --no-check --allow-read --allow-net=127.0.0.1 test/accept-signature-boundaries.ts test/accept-signature.ts test/algorithms.ts test/fields.ts test/rfc9421-appendix.ts test/rfc9421.ts test/structured-fields-display-string.ts test/structured-fields.ts test/robustness.ts test/runtime-e2e.ts test/signatures.ts",
+    "test:deno": "deno test --unstable-no-legacy-abort --no-check --allow-read --allow-net=127.0.0.1 test/accept-signature-boundaries.ts test/accept-signature.ts test/algorithms.ts test/algorithms-node.ts test/fields.ts test/rfc9421-appendix.ts test/rfc9421.ts test/structured-fields-display-string.ts test/structured-fields.ts test/robustness.ts test/runtime-e2e.ts test/signatures.ts",
     "test:docs": "bash ./check-examples.sh",
     "test:types": "tsc -p tsconfig.test.json",
     "test:workerd": "./test/.workerd.sh",
