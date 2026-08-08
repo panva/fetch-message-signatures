@@ -35,8 +35,30 @@ const verifier: VerifierFactory = () => ({
   },
 })
 
+// A provider backed by a synchronous library needs no Promise wrapper.
+const synchronousSigner: SignerFactory = () => ({
+  type: 'signer',
+  alg: 'ed25519',
+  sign(data) {
+    return signSynchronously(data)
+  },
+})
+
+const synchronousVerifier: VerifierFactory = () => ({
+  type: 'verifier',
+  alg: 'ed25519',
+  verify(data, signature) {
+    return verifySynchronously(data, signature)
+  },
+})
+
+declare function signSynchronously(data: Uint8Array): Uint8Array
+declare function verifySynchronously(data: Uint8Array, signature: Uint8Array): boolean
+
 void signer
 void verifier
+void synchronousSigner
+void synchronousVerifier
 
 const structuredDate: StructuredFieldDate = date(1_659_578_233)
 const structuredDisplayString: StructuredFieldDisplayString = displayString('snowman ☃')

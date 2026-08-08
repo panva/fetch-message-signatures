@@ -1,8 +1,10 @@
 # Interface: Signer
 
-A Promise-based signer implementation returned by a synchronous factory.
+A signer implementation returned by a [SignerFactory](../type-aliases/SignerFactory.md).
 
-Synchronous cryptographic libraries can be adapted by declaring `sign` as an `async` method.
+`sign()` may return the signature bytes directly or a Promise of them, so a synchronous
+cryptographic library needs no wrapper. Web Cryptography is asynchronous, so every signer this
+package builds returns a Promise.
 
 ## Contents
 
@@ -16,7 +18,7 @@ Synchronous cryptographic libraries can be adapted by declaring `sign` as an `as
 
 ### sign()
 
-> **sign**(`data`): `Promise`<`Uint8Array`<`ArrayBufferLike`>>
+> **sign**(`data`): `Uint8Array`<`ArrayBufferLike`> ∣ `Promise`<`Uint8Array`<`ArrayBufferLike`>>
 
 #### Parameters
 
@@ -26,7 +28,7 @@ Synchronous cryptographic libraries can be adapted by declaring `sign` as an `as
 
 #### Returns
 
-`Promise`<`Uint8Array`<`ArrayBufferLike`>>
+`Uint8Array`<`ArrayBufferLike`> ∣ `Promise`<`Uint8Array`<`ArrayBufferLike`>>
 
 ## Properties
 

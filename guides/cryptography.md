@@ -3,10 +3,9 @@
 `fetch-message-signatures` includes key-pair generators, signer factories, and verifier factories
 backed by Web Cryptography for ECDSA P-256, ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and
 RSASSA-PKCS1-v1_5 with SHA-256. HMAC and other cryptographic implementations plug into sender and
-recipient operations through the same small provider interfaces. A synchronous `SignerFactory`
-returns a signer with `alg` and an asynchronous `sign()` method. A synchronous `VerifierFactory`
-selects trusted key material and returns a verifier with `alg` and an asynchronous `verify()`
-method.
+recipient operations through the same small provider interfaces. A `SignerFactory` returns a signer
+with `alg` and a `sign()` method. A `VerifierFactory` selects trusted key material and returns a
+verifier with `alg` and a `verify()` method.
 
 The exported algorithm functions map RFC algorithm identifiers to Web Cryptography parameters and
 signature encoding. The application remains responsible for persistent key storage, key rotation,
@@ -132,8 +131,8 @@ PKCS#1 v1.5 as weaker and warns about
 [algorithm downgrade attacks](https://www.rfc-editor.org/info/rfc9421/#section-7.3.6). Bind each key
 to its algorithm in trusted configuration and keep the verification allowlist narrow.
 
-Providers can use hardware keys, remote signers, native bindings, or synchronous libraries. An
-asynchronous wrapper is enough for a synchronous implementation:
+Providers can use hardware keys, remote signers, native bindings, or synchronous libraries. Both
+methods may return their result directly or as a Promise, so a synchronous library needs no wrapper:
 
 ```ts
 declare function signSynchronously(data: Uint8Array): Uint8Array
@@ -142,7 +141,7 @@ declare function verifySynchronously(data: Uint8Array, signature: Uint8Array): b
 const signer: FetchSig.SignerFactory = () => ({
   type: 'signer',
   alg: 'ed25519',
-  async sign(data) {
+  sign(data) {
     return signSynchronously(data)
   },
 })
@@ -150,17 +149,21 @@ const signer: FetchSig.SignerFactory = () => ({
 const verifier: FetchSig.VerifierFactory = () => ({
   type: 'verifier',
   alg: 'ed25519',
-  async verify(data, signature) {
+  verify(data, signature) {
     return verifySynchronously(data, signature)
   },
 })
 ```
 
+The built-in providers are asynchronous because Web Cryptography is. Returning synchronously does
+not make the surrounding operation synchronous either: `sign()`, `verify()`, `createSignature()`,
+and the `fetch` wrappers all return Promises whatever the provider does.
+
 The provider must use the signature representation defined for its HTTP Message Signatures
 algorithm, including its hashing, padding, and encoding rules. Both provider methods receive owned
-`Uint8Array` values backed by `ArrayBuffer`. `sign()` resolves to a `Uint8Array`, and `verify()`
-resolves to a boolean. Provider exceptions become signature creation or verification failures whose
-`cause` is the original error. Signer output is copied before it is returned or serialized.
+`Uint8Array` values backed by `ArrayBuffer`. `sign()` produces a `Uint8Array`, and `verify()` a
+boolean. Provider exceptions become signature creation or verification failures whose `cause` is the
+original error. Signer output is copied before it is returned or serialized.
 
 Use a cryptographic library's verification primitive rather than comparing signatures in application
 JavaScript. When implementing a custom MAC verifier, the provider is responsible for constant-time

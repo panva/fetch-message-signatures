@@ -307,26 +307,37 @@ export interface SignatureFields extends MessageSignature {
 }
 
 /**
- * A Promise-based signer implementation returned by a synchronous factory.
+ * A signer implementation returned by a {@link SignerFactory}.
  *
- * Synchronous cryptographic libraries can be adapted by declaring `sign` as an `async` method.
+ * `sign()` may return the signature bytes directly or a Promise of them, so a synchronous
+ * cryptographic library needs no wrapper. Web Cryptography is asynchronous, so every signer this
+ * package builds returns a Promise.
  */
 export interface Signer {
   readonly type: 'signer'
   /** The algorithm selected by configuration or key metadata. */
   readonly alg: string
-  sign(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array>
+  sign(data: Uint8Array<ArrayBuffer>): Uint8Array | Promise<Uint8Array>
 }
 
 /** A synchronous factory returning a signer implementation. */
 export type SignerFactory = () => Readonly<Signer>
 
-/** A Promise-based verifier implementation returned by a {@link VerifierFactory}. */
+/**
+ * A verifier implementation returned by a {@link VerifierFactory}.
+ *
+ * `verify()` may return the result directly or a Promise of it, so a synchronous cryptographic
+ * library needs no wrapper. Web Cryptography is asynchronous, so every verifier this package builds
+ * returns a Promise.
+ */
 export interface Verifier {
   readonly type: 'verifier'
   /** The algorithm selected by configuration or key metadata. */
   readonly alg: string
-  verify(data: Uint8Array<ArrayBuffer>, signature: Uint8Array<ArrayBuffer>): Promise<boolean>
+  verify(
+    data: Uint8Array<ArrayBuffer>,
+    signature: Uint8Array<ArrayBuffer>,
+  ): boolean | Promise<boolean>
 }
 
 /**

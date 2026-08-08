@@ -1,6 +1,10 @@
 # Interface: Verifier
 
-A Promise-based verifier implementation returned by a [VerifierFactory](../type-aliases/VerifierFactory.md).
+A verifier implementation returned by a [VerifierFactory](../type-aliases/VerifierFactory.md).
+
+`verify()` may return the result directly or a Promise of it, so a synchronous cryptographic
+library needs no wrapper. Web Cryptography is asynchronous, so every verifier this package builds
+returns a Promise.
 
 ## Contents
 
@@ -14,7 +18,7 @@ A Promise-based verifier implementation returned by a [VerifierFactory](../type-
 
 ### verify()
 
-> **verify**(`data`, `signature`): `Promise`<`boolean`>
+> **verify**(`data`, `signature`): `boolean` ∣ `Promise`<`boolean`>
 
 #### Parameters
 
@@ -25,7 +29,7 @@ A Promise-based verifier implementation returned by a [VerifierFactory](../type-
 
 #### Returns
 
-`Promise`<`boolean`>
+`boolean` ∣ `Promise`<`boolean`>
 
 ## Properties
 
