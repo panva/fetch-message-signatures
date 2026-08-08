@@ -63,7 +63,7 @@ const signed = await FetchSig.sign(unsigned, {
 //   ;keyid="https://issuer.example/keys/current";tag="order"
 console.log(signed.headers.get('signature-input'))
 
-// Send the returned request; the source request must not be reused.
+// Send the returned request. The source request must not be reused.
 await fetch(signed)
 ```
 
@@ -152,7 +152,7 @@ const signed = await FetchSig.sign(unsigned, {
 //   ;keyid="https://issuer.example/keys/current";tag="order"
 console.log(signed.headers.get('signature-input'))
 
-// Send the returned request; the source request must not be reused.
+// Send the returned request. The source request must not be reused.
 await fetch(signed)
 ```
 
@@ -241,7 +241,7 @@ const signed = await FetchSig.sign(unsigned, {
 //   ;keyid="https://issuer.example/keys/current";tag="order"
 console.log(signed.headers.get('signature-input'))
 
-// Send the returned request; the source request must not be reused.
+// Send the returned request. The source request must not be reused.
 await fetch(signed)
 ```
 

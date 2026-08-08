@@ -344,7 +344,7 @@ describe('RFC 9421 Section 2 component value examples', () => {
       structuredFields,
       fieldValues: (_message, name, context) => (context.trailers ? undefined : fields[name]),
     }).split('\n')
-    // Drop the "@signature-params" line; these vectors are about component values.
+    // Drop the "@signature-params" line, because these vectors are about component values.
     return lines.slice(0, -1)
   }
 

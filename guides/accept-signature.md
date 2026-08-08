@@ -89,11 +89,11 @@ const signedResponse = await FetchSig.signRequested(response, signatureRequest, 
 The fulfillment helpers require the application to supply values that cannot be chosen from the
 request alone:
 
-- requested `created` defaults to the current time, or `now` when supplied;
-- requested `expires` requires an explicit expiration timestamp;
-- requested `keyid` requires explicit key selection and must equal the requested value; and
+- requested `created` defaults to the current time, or `now` when supplied
+- requested `expires` requires an explicit expiration timestamp
+- requested `keyid` requires explicit key selection and must equal the requested value
 - every unknown extension parameter must be explicitly supplied with the same value, proving that
-  the application processed its semantics.
+  the application processed its semantics
 
 An `expires` request does not specify a duration. Choose the timestamp from local policy, not from
 the request. The recipient still applies its own age, expiration, and replay policy.

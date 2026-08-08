@@ -71,7 +71,7 @@ authenticated values are consumed.
 
 Signatures provide integrity and authentication of covered components, not confidentiality. TLS
 protects keys and sensitive metadata from observation, constrains active traffic manipulation, and
-authenticates the transport endpoint. HTTP message signatures complement TLS; they are not a
+authenticates the transport endpoint. HTTP message signatures complement TLS. They are not a
 replacement for it.
 
 Reject oversized signature fields and excessive header counts at the HTTP server or gateway before

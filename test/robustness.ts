@@ -1879,7 +1879,7 @@ describe('target URI boundaries', () => {
   const message = (url: string) => ({ method: 'GET', url, headers: new Headers() }) as Request
 
   it('rejects a target URI carrying credentials', () => {
-    // Node.js and browsers refuse to construct such a Request; Deno, Bun, and workerd do not, and
+    // Node.js and browsers refuse to construct such a Request. Deno, Bun, and workerd do not, and
     // would otherwise place the password into the signature base.
     for (const url of ['https://user:s3cret@example.com/x', 'https://user@example.com/x']) {
       for (const name of ['@target-uri', '@authority', '@path', '@request-target']) {
@@ -2111,7 +2111,7 @@ describe('linear-time boundary before verification', () => {
 
   it('parses a Dictionary with many unique members without a per-member scan', () => {
     // The ordered map preserved insertion order with a findIndex() per member, so a Signature-Input
-    // carrying N distinct labels cost O(N^2). This input took about half a minute; it now takes
+    // carrying N distinct labels cost O(N^2). This input took about half a minute. It now takes
     // under a tenth of a second.
     const labels = 100_000
     const value = Array.from({ length: labels }, (_, index) => `s${index}=("@method")`).join(',')
@@ -2294,7 +2294,7 @@ async function withinBound<T>(operation: Promise<T>, description: string): Promi
 describe('fetch wrapper resource and transport handling', () => {
   it('forwards runtime-specific transport options', async () => {
     // Node.js dispatcher, Deno client, Bun proxy/tls/unix. Whether one survives Request
-    // reconstruction on its own varies by runtime, so they are forwarded either way; dropping one
+    // reconstruction on its own varies by runtime, so they are forwarded either way. Dropping one
     // can open an ordinary connection where the caller required a proxy or a client certificate.
     let observed: RequestInit | undefined
     let calls = 0
@@ -2610,7 +2610,7 @@ describe('fetch wrapper resource and transport handling', () => {
   })
 
   it('treats an accessor descriptor with no getter as an accessor, not as data', async () => {
-    // A data descriptor owns "value"; an accessor descriptor owns "get" and "set" even when both are
+    // A data descriptor owns "value", while an accessor descriptor owns "get" and "set" even when both are
     // undefined. Classifying by the accessor values instead would snapshot this one, so redefining
     // the property before dispatch would no longer be visible.
     let seen: unknown
@@ -2657,7 +2657,7 @@ describe('fetch wrapper resource and transport handling', () => {
   it('captures a transport option at invocation, not at dispatch', async () => {
     // fetch() reads its initializer at once. A caller that reuses one initializer and assigns to it
     // again while an earlier signature is still pending must see the earlier request keep the value
-    // it was called with; assigning undefined would otherwise turn a request that had to use a proxy
+    // it was called with. Assigning undefined would otherwise turn a request that had to use a proxy
     // into a direct connection.
     for (const shape of ['own', 'inherited'] as const) {
       let release!: () => void

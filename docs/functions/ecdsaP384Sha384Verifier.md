@@ -5,7 +5,7 @@
 Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ecdsa-p384-sha384`.
 
 Signatures use the RFC-required 96-byte raw `r || s` representation. This fixed-key factory does
-not perform `keyid` lookup or authorization; select it from trusted application configuration
+not perform `keyid` lookup or authorization. Select it from trusted application configuration
 when more than one verification key can be used.
 
 ## Parameters

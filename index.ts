@@ -216,7 +216,7 @@ export interface FieldValueContext {
  * representation of the HTTP message than `Headers`.
  *
  * If a field name occurs in both the header and trailer sections, return only the section selected
- * by `context.trailers`; RFC 9421 forbids combining same-name header and trailer values for
+ * by `context.trailers`. RFC 9421 forbids combining same-name header and trailer values for
  * signature-base generation.
  *
  * Returning `undefined` or an empty array indicates that the field is absent.
@@ -593,7 +593,7 @@ export function ecdsaP256Sha256Signer(key: CryptoKey): SignerFactory {
  * Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ecdsa-p256-sha256`.
  *
  * Signatures use the RFC-required 64-byte raw `r || s` representation. This fixed-key factory does
- * not perform `keyid` lookup or authorization; select it from trusted application configuration
+ * not perform `keyid` lookup or authorization. Select it from trusted application configuration
  * when more than one verification key can be used.
  *
  * @param key - Web Cryptography's `CryptoKey` for an ECDSA P-256 public key with `verify` usage.
@@ -683,7 +683,7 @@ export function ecdsaP384Sha384Signer(key: CryptoKey): SignerFactory {
  * Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ecdsa-p384-sha384`.
  *
  * Signatures use the RFC-required 96-byte raw `r || s` representation. This fixed-key factory does
- * not perform `keyid` lookup or authorization; select it from trusted application configuration
+ * not perform `keyid` lookup or authorization. Select it from trusted application configuration
  * when more than one verification key can be used.
  *
  * @param key - Web Cryptography's `CryptoKey` for an ECDSA P-384 public key with `verify` usage.
@@ -752,7 +752,7 @@ export function ed25519Signer(key: CryptoKey): SignerFactory {
  * Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ed25519`.
  *
  * The message is verified directly with Ed25519, without an external pre-hash. This fixed-key
- * factory does not perform `keyid` lookup or authorization; select it from trusted application
+ * factory does not perform `keyid` lookup or authorization. Select it from trusted application
  * configuration when more than one verification key can be used.
  *
  * @example
@@ -1062,7 +1062,7 @@ function base64Decode(value: string): Uint8Array<ArrayBuffer> {
     }
     return output
   } catch (cause) {
-    // Reported as a SyntaxError by the runtime; every other parse failure here is a TypeError.
+    // Reported as a SyntaxError by the runtime. Every other parse failure here is a TypeError.
     throw new TypeError('Invalid Structured Field Byte Sequence', { cause })
   }
 }
@@ -1684,7 +1684,7 @@ export function token(value: string): StructuredFieldToken {
  *
  * @example
  *
- * A plain integral number is an Integer; the wrapper keeps it a Decimal. Values are rounded to
+ * A plain integral number is an Integer, and the wrapper keeps it a Decimal. Values are rounded to
  * three fraction digits, half to even, as RFC 9651 requires.
  *
  * ```ts
@@ -1757,7 +1757,7 @@ export function date(value: number | Date): StructuredFieldDate {
  *
  * The value must contain only Unicode scalar values. Serialization UTF-8 encodes characters that
  * are not safe ASCII and represents their bytes using lowercase percent encoding. Display Strings
- * are intended for text shown to users; use a regular Structured Field String when Unicode display
+ * are intended for text shown to users. Use a regular Structured Field String when Unicode display
  * text is not required.
  *
  * @example
@@ -1817,7 +1817,7 @@ export function displayString(value: string): StructuredFieldDisplayString {
  * @example
  *
  * Parameters combine, and their order is covered by the signature. Pass ordered tuples whenever
- * another implementation has to reproduce the exact serialization; an object is also accepted and
+ * another implementation has to reproduce the exact serialization. An object is also accepted and
  * keeps its property insertion order.
  *
  * ```ts
@@ -2226,9 +2226,9 @@ function readComponentFlag(
  * Enforces the component parameters RFC 9421 allows on a given component identifier and reports
  * whether the value comes from the related request.
  *
- * Derived components accept only `req`, plus `name` on `@query-param`; `@status` accepts neither.
- * HTTP fields accept `sf`, `key`, `bs`, `tr`, and `req`, and `bs` is incompatible with `sf` and
- * `key`.
+ * Derived components accept only `req`, plus `name` on `@query-param`, and `@status` accepts
+ * neither. HTTP fields accept `sf`, `key`, `bs`, `tr`, and `req`, and `bs` is incompatible with
+ * `sf` and `key`.
  */
 function validateComponentParameters(identifier: MessageComponent): boolean {
   validateComponentName(identifier)
@@ -2635,7 +2635,7 @@ function deriveRequestComponentValue(
     case '@target-uri':
       return target
     case '@authority':
-      // The URL parser already lowercases hosts of the special schemes used by HTTP; lowercasing
+      // The URL parser already lowercases hosts of the special schemes used by HTTP, and lowercasing
       // again satisfies the RFC's normalization requirement for every other scheme too.
       return assertTargetUriAuthority(url, identifier.name).toLowerCase()
     case '@scheme':
@@ -2827,7 +2827,7 @@ function resolveStructuredFieldType(
   if (options.structuredFields !== undefined) {
     // Own properties only. A component can name a field such as "constructor", which every plain
     // object inherits, and reading it would report a configured type that the application never
-    // wrote. Both paths reject the component; this one names the actual reason.
+    // wrote. Both paths reject the component, but this one names the actual reason.
     if (!Object.hasOwn(options.structuredFields, name)) {
       return undefined
     }
@@ -3606,7 +3606,7 @@ async function createSignatureInternal(
  * Creates one HTTP message signature without modifying or cloning the Fetch message.
  *
  * The returned one-member field values can be attached while constructing a message or passed to
- * {@link appendSignature}. A `created` timestamp is added by default; pass `created: false` in
+ * {@link appendSignature}. A `created` timestamp is added by default. Pass `created: false` in
  * `parameters` to explicitly omit it.
  *
  * @example
@@ -3914,7 +3914,7 @@ export function appendSignature(
  * //   ;keyid="https://issuer.example/keys/current";tag="order"
  * console.log(signed.headers.get('signature-input'))
  *
- * // Send the returned request; the source request must not be reused.
+ * // Send the returned request. The source request must not be reused.
  * await fetch(signed)
  * ```
  *
@@ -4336,7 +4336,7 @@ function parseAcceptSignatureInternal(value: string): ParsedSignatureInput[] {
  *
  * Validates component identifiers and the value types of requested signature metadata parameters,
  * where `created` and `expires` carry no value because the signer chooses the timestamps. It does
- * not check the requested components against a message; use {@link getSignatureRequests} when the
+ * not check the requested components against a message. Use {@link getSignatureRequests} when the
  * message is available.
  *
  * @example
@@ -4726,7 +4726,7 @@ function requestedSignatureOptions(
  *
  * @example
  *
- * The label and covered components come from the request; the values that cannot be chosen from the
+ * The label and covered components come from the request. The values that cannot be chosen from the
  * request alone come from the signer. Here `keyid` was requested and so must be selected
  * explicitly, and `expires` is a local policy decision rather than something the peer dictates.
  *
@@ -5037,7 +5037,7 @@ function findInitMember(source: object, name: string): PropertyDescriptor | unde
  * to the request, opening an ordinary connection where the caller required a proxy, a client
  * certificate, or a Unix socket. Which options survive a reconstruction on their own varies by
  * runtime, so they are forwarded regardless. For a data property that costs nothing, because the
- * value forwarded is the one captured at invocation; an option implemented as an accessor is read
+ * value forwarded is the one captured at invocation. An option implemented as an accessor is read
  * again by the implementation at dispatch.
  *
  * Other standard members are deliberately excluded: they are already on the signed request, and
@@ -5055,7 +5055,7 @@ function findInitMember(source: object, name: string): PropertyDescriptor | unde
  * A data property is captured here, while this call is still synchronous with the caller's
  * invocation, which is when `fetch()` reads its own initializer. A caller that reuses one
  * initializer and assigns to it again while an earlier signature is still pending therefore keeps
- * the value the earlier request was called with; deferring that read would let a later assignment
+ * the value the earlier request was called with. Deferring that read would let a later assignment
  * change the transport of a request already in flight, and assigning `undefined` would turn a
  * request that had to use a proxy into a direct connection.
  *
@@ -5064,7 +5064,7 @@ function findInitMember(source: object, name: string): PropertyDescriptor | unde
  * propagates its failure and stops the request, while one this runtime does not implement is never
  * evaluated. Reading it here instead would make a required proxy, client certificate, or socket
  * silently degrade into an ordinary connection, or fail a request the implementation would have
- * accepted. The cost is that an accessor may be read at dispatch, and more than once; no
+ * accepted. The cost is that an accessor may be read at dispatch, and more than once, and no
  * single-read guarantee applies to one. The two properties cannot both hold for the same member.
  */
 function runtimeFetchOptions(request: Request, init?: RequestInit): RequestInit | undefined {
@@ -5082,7 +5082,7 @@ function runtimeFetchOptions(request: Request, init?: RequestInit): RequestInit 
     Object.defineProperty(
       forwarded,
       name,
-      // A data descriptor owns "value"; an accessor descriptor owns "get" and "set" even when both
+      // A data descriptor owns "value", while an accessor descriptor owns "get" and "set" even when both
       // are undefined, so the presence of the field is what distinguishes them.
       Object.hasOwn(descriptor, 'value')
         ? { configurable: true, enumerable: true, value: descriptor.value, writable: true }

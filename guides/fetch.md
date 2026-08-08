@@ -8,29 +8,29 @@ some wire details.
 The append helpers return new objects so they can work with Fetch messages whose headers have an
 immutable guard:
 
-- appending to `Headers` copies the headers;
-- appending to a `Request` constructs a new request with updated headers; and
-- appending to a `Response` constructs a new response with updated headers.
+- appending to `Headers` copies the headers
+- appending to a `Request` constructs a new request with updated headers
+- appending to a `Response` constructs a new response with updated headers
 
 The Request and Response helpers pass the source body stream to a new Fetch message without calling
 `clone()` or buffering it in the package. The Fetch implementation decides whether this disturbs,
 transfers, or leaves the source body readable. Node.js, Deno, and Bun do not expose the source
-body's state identically. Do not rely on that state after constructing the signed message; consume
+body's state identically. Do not rely on that state after constructing the signed message. Consume
 the returned message instead.
 
 When both copies must remain independently readable, choose an application-specific strategy:
 
-1. clone or buffer the body under an explicit size limit;
-2. use `createSignature()` to obtain only the fields;
-3. construct the final message with the chosen body; and
-4. place the returned field values in its headers.
+1. clone or buffer the body under an explicit size limit
+2. use `createSignature()` to obtain only the fields
+3. construct the final message with the chosen body
+4. place the returned field values in its headers
 
 The pure creation functions do not inspect, consume, or hash a body.
 
 Signing and verification snapshot observable headers and reconstruct the signature base around
 asynchronous provider calls. They reject if the target message, related request, raw field adapter,
-or trailer context changes during the operation. Keep those inputs stable until the Promise settles;
-a `fieldValues` adapter must return a deterministic view of the same message.
+or trailer context changes during the operation. Keep those inputs stable until the Promise settles.
+A `fieldValues` adapter must return a deterministic view of the same message.
 
 ## Response metadata
 
@@ -65,11 +65,11 @@ Forwarding stale signature fields can also disclose them to another origin.
 request, and verification wrappers cannot observe the exact request that produced a response after
 Fetch follows a redirect. To follow safely:
 
-1. inspect and authorize the redirect target;
-2. construct the next request according to Fetch redirect semantics;
-3. remove old `signature-input` and `signature` fields;
-4. select coverage for the new message; and
-5. sign the new request.
+1. inspect and authorize the redirect target
+2. construct the next request according to Fetch redirect semantics
+3. remove old `signature-input` and `signature` fields
+4. select coverage for the new message
+5. sign the new request
 
 There is no generic way for a Fetch wrapper to do all of this without application redirect policy.
 
@@ -155,7 +155,7 @@ components fail rather than deriving an empty authority or a relative path. Ever
 9421 applies to has an authority, so this only affects messages that were never HTTP requests.
 
 A target URI carrying credentials is rejected. RFC 9110 forbids the userinfo subcomponent in an
-`http` or `https` URI; Node.js and browsers refuse to construct such a `Request` at all, while Deno,
+`http` or `https` URI. Node.js and browsers refuse to construct such a `Request` at all, while Deno,
 Bun, and Cloudflare Workers accept it and would otherwise place the password in the signature base
 and in anything that logs or exchanges it.
 
@@ -168,17 +168,17 @@ a signature has to reproduce across runtimes.
 
 Fetch does not expose:
 
-- the exact request-target octets received on the wire;
-- all HTTP request-target forms;
-- the HTTP version;
-- proxy rewrites that happened before the Fetch object was created; or
-- later rewrites that happen after Fetch sends it.
+- the exact request-target octets received on the wire
+- all HTTP request-target forms
+- the HTTP version
+- proxy rewrites that happened before the Fetch object was created
+- later rewrites that happen after Fetch sends it
 
 Every derived value above comes from `Request.url` as the Fetch implementation normalized it, not
 from the octets on the wire. A reverse proxy that rewrites the target between signer and verifier
 therefore gives the two sides different values for the same message, and neither side can tell from
 its Fetch object that this happened. Signing and verifying on the same side of such a rewrite is a
-deployment property; this package cannot detect it.
+deployment property that this package cannot detect.
 
 ## Browser security boundaries
 
@@ -213,14 +213,14 @@ redirects should handle them before the wrapper, or use a target that does not r
 
 The package exposes independent wrappers for each direction:
 
-- `createSigningFetch()` signs each outgoing request;
+- `createSigningFetch()` signs each outgoing request
 - `createVerifyingFetch()` verifies each response against the exact request it sent without adding a
-  signature; and
+  signature
 - `createSignedFetch()` signs each request and can verify the response against that exact signed
-  request.
+  request
 
 Use the directional factory when only one operation is required so a bundler can omit the opposite
-pipeline. Use `createSignedFetch()` when both operations are required; nesting the directional Fetch
+pipeline. Use `createSignedFetch()` when both operations are required. Nesting the directional Fetch
 wrappers can bind verification to a different request object or reconstruct a streaming request an
 extra time.
 
@@ -230,8 +230,8 @@ request.
 
 Reconstructing a request resets some of it. The Fetch constructor sets the referrer to `client` and
 the referrer policy to the empty string whenever the initializer is not empty, so every
-reconstruction in this package restores both from the source request; a caller that suppressed the
-`Referer` field keeps it suppressed. Initializer members that select a transport rather than a
+reconstruction in this package restores both from the source request, so a caller that suppressed
+the `Referer` field keeps it suppressed. Initializer members that select a transport rather than a
 message, such as `dispatcher` on Node.js, `client` on Deno, `cf` on Cloudflare Workers, and `proxy`,
 `tls`, and `unix` on Bun, are forwarded to the underlying implementation rather than dropped, so a
 required proxy or client certificate is not silently bypassed. Whether a given option would have
@@ -239,12 +239,12 @@ survived the reconstruction on its own varies by runtime, so it is forwarded eit
 property is captured when the wrapper is called, matching what `fetch()` itself reads, so reusing
 and reassigning one initializer cannot change the transport of a request already in flight. An
 option implemented as an accessor is instead left for the implementation to read at dispatch, and
-may be read more than once; no single-read guarantee applies to one. Other standard members are not
-forwarded, because the signed request already carries them and forwarding `headers` would replace
-the signature fields.
+may be read more than once, and no single-read guarantee applies to one. Other standard members are
+not forwarded, because the signed request already carries them and forwarding `headers` would
+replace the signature fields.
 
 A signing wrapper also observes the request's `AbortSignal` while signing is still pending, so a
-slow or stalled signer does not leave `fetch()` hanging with no way to give up; when the abort wins,
+slow or stalled signer does not leave `fetch()` hanging with no way to give up. When the abort wins,
 the transport is never reached. When a verifying wrapper rejects, it cancels the response body on a
 best-effort basis before rethrowing, because the caller never receives the response and would
 otherwise have no way to release the stream. `verify()` called directly does not do this: its caller

@@ -43,7 +43,7 @@ console.log(base)
 ```
 
 Parameters combine, and their order is covered by the signature. Pass ordered tuples whenever
-another implementation has to reproduce the exact serialization; an object is also accepted and
+another implementation has to reproduce the exact serialization. An object is also accepted and
 keeps its property insertion order.
 
 ```ts

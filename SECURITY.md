@@ -48,7 +48,7 @@ Before verification, signature labels, parameters such as `keyid` and `alg`, cov
 identifiers, and all message values are untrusted. Signature labels are unsigned dictionary keys.
 The verifier factory must resolve `keyid` through trusted, scoped configuration rather than use it
 as a network location. An incoming `alg` value must agree with the configured key and the
-recipient's algorithm policy; it cannot choose the algorithm by itself.
+recipient's algorithm policy. It cannot choose the algorithm by itself.
 
 A valid cryptographic signature proves integrity only for the listed components under the selected
 key. Coverage requirements, key authorization, freshness, replay prevention, body digest validation,
@@ -73,13 +73,13 @@ exceptions and detailed key-store errors should not be exposed to unauthenticate
 The following are normally application or protocol-design responsibilities unless
 `fetch-message-signatures` documents or enforces a property incorrectly:
 
-- failure to require a security-relevant component;
-- accepting a trusted key outside its intended application scope;
-- replay within a policy that has no nonce or replay store;
-- failure to independently validate a body digest;
-- disclosure of unsigned or unencrypted message content;
-- a Fetch or intermediary normalization that the deployment did not account for; or
-- weakness in a custom cryptographic provider.
+- failure to require a security-relevant component
+- accepting a trusted key outside its intended application scope
+- replay within a policy that has no nonce or replay store
+- failure to independently validate a body digest
+- disclosure of unsigned or unencrypted message content
+- a Fetch or intermediary normalization that the deployment did not account for
+- weakness in a custom cryptographic provider
 
 Two classes of report are outside the package's control entirely.
 
@@ -90,7 +90,7 @@ already alter any computation in the process, so no defense inside a single modu
 Reports of this kind are only in scope where the package itself introduces the pollution.
 
 Absolute resource limits are a deployment responsibility. The package does not bound the size or
-number of fields, signatures, covered components, or metadata parameters it will process; those
+number of fields, signatures, covered components, or metadata parameters it will process. Those
 belong at the HTTP server or gateway, as described in the
 [security guidance](guides/security.md#transport-resources-and-failures). What the package does own
 is algorithmic complexity: parsing, canonicalization, and signature base generation are intended to
@@ -100,9 +100,9 @@ before any signature has been checked.
 Reports showing any of the following are in scope:
 
 - the implementation accepts a signature base or Structured Field contrary to an applicable
-  specification, or produces one that a conforming implementation would reject;
+  specification, or produces one that a conforming implementation would reject
 - configured verification policy is bypassed, or a verified signature is misattributed to the wrong
-  message, key, algorithm, or label;
+  message, key, algorithm, or label
 - a value derived from an unauthenticated message escapes as authenticated, or authenticated state
-  can be mutated by an application callback after it has been checked; or
-- work grows superlinearly with the size of an attacker-supplied message.
+  can be mutated by an application callback after it has been checked
+- work grows superlinearly with the size of an attacker-supplied message

@@ -397,7 +397,7 @@ describe('RFC 9421 Appendix B complete examples', () => {
   it('creates the exact deterministic B.2.6 Ed25519 signature', async () => {
     // Ed25519 is deterministic under RFC 8032, so this asserts the exact published bytes. WebKit
     // produces a different signature for the same key and message, so the vector is only asserted
-    // where the host agrees with the RFC; the round trip below still covers WebKit.
+    // where the host agrees with the RFC. The round trip below still covers WebKit.
     if (!(await ed25519IsDeterministic())) {
       return
     }

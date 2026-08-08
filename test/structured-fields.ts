@@ -1,12 +1,12 @@
 // Runs the httpwg/structured-field-tests conformance corpus against this package's RFC 9651
-// implementation. The corpus is vendored under test/fixtures/structured-field-tests; refresh it
+// implementation. The corpus is vendored under test/fixtures/structured-field-tests. Refresh it
 // with `node --run fixtures`.
 //
 // The corpus tests a Structured Fields parser and serializer directly. This package does not export
 // one, so the corpus is driven through the surface that RFC 9421 actually reaches it from:
 //
 //   - parsing and strict re-serialization, through the `sf` component parameter, which is defined
-//     as "parse the field value, then serialize it with the strict rules"; and
+//     as "parse the field value, then serialize it with the strict rules", and
 //   - bare item serialization, through signature metadata parameter values and names.
 //
 // That is the behavior signature bases depend on, so a regression the corpus can detect is a

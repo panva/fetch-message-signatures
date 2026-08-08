@@ -31,7 +31,7 @@ const portableKeys = await FetchSig.generateEd25519KeyPair(true)
 ```
 
 It defaults to `false` and controls the private key. `SubtleCrypto.generateKey()` always marks the
-generated public key extractable, whatever this argument is; extractability is a per-key property,
+generated public key extractable, whatever this argument is. Extractability is a per-key property,
 not a property of `CryptoKey` in general. An extractable key can be exported for storage or
 transport, so opt in only when the application's key-management design requires it.
 
@@ -136,7 +136,7 @@ const verifier: FetchSig.VerifierFactory = () => ({
 
 The provider must use the signature representation defined for its HTTP Message Signatures
 algorithm, including its hashing, padding, and encoding rules. Both provider methods receive owned
-`Uint8Array` values backed by `ArrayBuffer`. `sign()` resolves to a `Uint8Array`; `verify()`
+`Uint8Array` values backed by `ArrayBuffer`. `sign()` resolves to a `Uint8Array`, and `verify()`
 resolves to a boolean. Provider exceptions become signature creation or verification failures whose
 `cause` is the original error. Signer output is copied before it is returned or serialized.
 

@@ -6,7 +6,7 @@ Parses an `Accept-Signature` field value into its labeled signature requests.
 
 Validates component identifiers and the value types of requested signature metadata parameters,
 where `created` and `expires` carry no value because the signer chooses the timestamps. It does
-not check the requested components against a message; use [getSignatureRequests](getSignatureRequests.md) when the
+not check the requested components against a message. Use [getSignatureRequests](getSignatureRequests.md) when the
 message is available.
 
 ## Parameters

@@ -40,7 +40,7 @@ const ENTRIES = [
   { name: 'createVerifyingFetch', families: ['recipient'] },
   { name: 'createSignedFetch', families: ['sender', 'recipient'] },
   { name: 'appendAcceptSignature', families: ['accept'] },
-  // Builds the field value only; it never names the field, so it pulls in no family.
+  // Builds the field value only. It never names the field, so it pulls in no family.
   { name: 'createAcceptSignature', families: [] },
   { name: 'getSignatureRequests', families: ['accept'] },
   { name: 'signRequested', families: ['sender', 'accept'] },

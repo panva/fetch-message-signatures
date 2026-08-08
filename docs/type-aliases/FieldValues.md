@@ -9,7 +9,7 @@ using the `bs` or `tr` component parameters, or when an application has a more a
 representation of the HTTP message than `Headers`.
 
 If a field name occurs in both the header and trailer sections, return only the section selected
-by `context.trailers`; RFC 9421 forbids combining same-name header and trailer values for
+by `context.trailers`. RFC 9421 forbids combining same-name header and trailer values for
 signature-base generation.
 
 Returning `undefined` or an empty array indicates that the field is absent.

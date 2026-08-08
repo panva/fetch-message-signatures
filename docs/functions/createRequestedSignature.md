@@ -23,7 +23,7 @@ be supplied here with the same value. Additional parameters may be supplied and 
 
 ## Example
 
-The label and covered components come from the request; the values that cannot be chosen from the
+The label and covered components come from the request. The values that cannot be chosen from the
 request alone come from the signer. Here `keyid` was requested and so must be selected
 explicitly, and `expires` is a local policy decision rather than something the peer dictates.
 

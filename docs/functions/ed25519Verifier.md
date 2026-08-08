@@ -5,7 +5,7 @@
 Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ed25519`.
 
 The message is verified directly with Ed25519, without an external pre-hash. This fixed-key
-factory does not perform `keyid` lookup or authorization; select it from trusted application
+factory does not perform `keyid` lookup or authorization. Select it from trusted application
 configuration when more than one verification key can be used.
 
 ## Parameters

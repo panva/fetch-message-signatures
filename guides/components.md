@@ -19,17 +19,17 @@ case-sensitive, and must be one of the supported RFC 9421 components.
 
 ## Derived components
 
-| Component               | Target   | Fetch source                                                        |
-| ----------------------- | -------- | ------------------------------------------------------------------- |
-| `@method`               | Request  | `Request.method`                                                    |
-| `@target-uri`           | Request  | `Request.url` without a fragment                                    |
-| `@authority`            | Request  | Lowercase URL host; non-default port retained, default port omitted |
-| `@scheme`               | Request  | Lowercase URL scheme                                                |
-| `@request-target`       | Request  | URL-derived origin-form path plus query; see the warning below      |
-| `@path`                 | Request  | URL path, defaulting to `/`                                         |
-| `@query`                | Request  | `?` plus the query, or `?` when absent                              |
-| `@query-param;name="…"` | Request  | Exactly one matching decoded-and-reencoded query parameter          |
-| `@status`               | Response | Unfiltered three-digit numeric response status, without reason text |
+| Component               | Target   | Fetch source                                                                |
+| ----------------------- | -------- | --------------------------------------------------------------------------- |
+| `@method`               | Request  | `Request.method`                                                            |
+| `@target-uri`           | Request  | `Request.url` without a fragment                                            |
+| `@authority`            | Request  | Lowercase URL host, retaining a non-default port and omitting a default one |
+| `@scheme`               | Request  | Lowercase URL scheme                                                        |
+| `@request-target`       | Request  | URL-derived origin-form path plus query, with the warning below             |
+| `@path`                 | Request  | URL path, defaulting to `/`                                                 |
+| `@query`                | Request  | `?` plus the query, or `?` when absent                                      |
+| `@query-param;name="…"` | Request  | Exactly one matching decoded-and-reencoded query parameter                  |
+| `@status`               | Response | Unfiltered three-digit numeric response status, without reason text         |
 
 `@authority` follows URL authority normalization. For example, an explicit `:443` on an `https` URL
 or `:80` on an `http` URL is omitted, while a non-default port such as `:8443` is retained.
@@ -37,7 +37,7 @@ or `:80` on an `http` URL is omitted, while a non-default port such as `:8443` i
 `@authority`, `@path`, and `@request-target` require a target URI that has an authority, which every
 scheme RFC 9421 applies to does. A URL without one, such as `data:` or `blob:`, fails rather than
 producing an empty authority or a relative path. A target URI carrying credentials is rejected
-outright; see [Fetch behavior](./fetch.md#url-derived-components).
+outright. See [Fetch behavior](./fetch.md#url-derived-components).
 
 RFC 9421 marks `@request-target` as **NOT RECOMMENDED** when an HTTP version other than HTTP/1.1
 might be used. This implementation derives its origin-form path and query from `Request.url`. Use it
@@ -53,7 +53,7 @@ name. Encoding follows RFC 9421: the query string is parsed with the URL Standar
 `application/x-www-form-urlencoded` parser, and each decoded name and value is re-encoded with that
 standard's `application/x-www-form-urlencoded` percent-encode set. So `+` in the query decodes to a
 space and re-encodes to `%20`, not back to `+`, matching the worked example in RFC 9421 §2.2.8. The
-characters `!`, `'`, `(`, `)`, and `~` are percent-encoded; `*`, `-`, `.`, and `_` are not.
+characters `!`, `'`, `(`, `)`, and `~` are percent-encoded, while `*`, `-`, `.`, and `_` are not.
 
 ```ts
 const request = new Request('https://api.example/p?bar=with+plus+whitespace')
@@ -68,7 +68,7 @@ console.log(base)
 ```
 
 A parameter that is absent fails signature base generation. A parameter name that occurs more than
-once must not be signed at all, so it is rejected rather than resolved to one of its values; cover
+once must not be signed at all, so it is rejected rather than resolved to one of its values. Cover
 `@query` instead when repeated names are expected.
 
 The `@signature-params` component is never listed. It is appended automatically as the last line of

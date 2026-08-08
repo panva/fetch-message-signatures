@@ -3,7 +3,7 @@
 Please follow the project [Code of Conduct][coc] in all interactions.
 
 Before proposing a pull request, discuss substantial changes in [GitHub Discussions][discussions].
-This project follows the specifications it implements; changes that introduce non-standard protocol
+This project follows the specifications it implements. Changes that introduce non-standard protocol
 behavior are unlikely to be accepted. Bug fixes and new features that affect wire behavior should
 identify the relevant specification section and include tests for both successful and rejected
 inputs.
@@ -36,7 +36,7 @@ node --run test:deno
 node --run test:workerd
 ```
 
-`test:workerd` needs `workerd` on the path; install it with
+`test:workerd` needs `workerd` on the path. Install it with
 `npm install --global workerd && npm link workerd`. Note that a later `npm install` prunes the link
 and it has to be re-created.
 
@@ -71,11 +71,11 @@ node --run test:browsers
 Set `BROWSER` to `chromium`, `firefox`, or `safari` to run one browser.
 
 Run `node --run format` before submitting changes. Generated API documentation under `docs/` is
-committed and must match `index.ts`; regenerate it with `node --run docs`.
+committed and must match `index.ts`. Regenerate it with `node --run docs`.
 
 Keep runtime code in `index.ts`. The package intentionally exposes named functions from one module
 so consumers can tree-shake unused operations, and the sender, recipient, and `Accept-Signature`
-paths must not reach into one another; `check:bundles` enforces that. Some duplication between them
+paths must not reach into one another, which `check:bundles` enforces. Some duplication between them
 is deliberate for the same reason. Cryptography and key management remain behind the provider
 interfaces.
 

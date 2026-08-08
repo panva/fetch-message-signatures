@@ -104,9 +104,9 @@ fixtures deterministic.
 
 The `alg` parameter is optional. If it is present, signing fails unless its value equals the
 signer's `alg`. RFC 9421 expects the value to come from the "HTTP Signature Algorithms" registry,
-but the package does not carry a copy of that registry and accepts any Structured Field String; see
+but the package does not carry a copy of that registry and accepts any Structured Field String. See
 the [cryptographic providers guide](cryptography.md). The recipient still chooses the algorithm from
-trusted configuration; an `alg` value received from the wire is only a claim.
+trusted configuration. An `alg` value received from the wire is only a claim.
 
 The default `created` parameter is placed before the supplied parameters. Parameter order is covered
 by the signature, so supply `created` explicitly when a specific order is required.

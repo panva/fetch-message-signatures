@@ -19,7 +19,7 @@ the serialized value `1.0`.
 
 ## Example
 
-A plain integral number is an Integer; the wrapper keeps it a Decimal. Values are rounded to
+A plain integral number is an Integer, and the wrapper keeps it a Decimal. Values are rounded to
 three fraction digits, half to even, as RFC 9651 requires.
 
 ```ts

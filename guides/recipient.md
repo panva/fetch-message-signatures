@@ -1,7 +1,7 @@
 # Recipient guide
 
 Verification combines application policy, trusted key and algorithm selection, and cryptographic
-verification. `verify()` requires all three; it cannot be configured to accept any cryptographically
+verification. `verify()` requires all three. It cannot be configured to accept any cryptographically
 valid signature.
 
 ## Resolve a trusted verifier
@@ -42,7 +42,7 @@ const verifier: FetchSig.VerifierFactory = (signature, context) => {
 ```
 
 The factory is synchronous. Resolve keys from a local trust store or pre-populated cache. If key
-discovery requires network I/O, perform and validate that discovery before calling `verify()`; never
+discovery requires network I/O, perform and validate that discovery before calling `verify()`. Never
 fetch an arbitrary URL merely because it appeared in an unverified `keyid`.
 
 `context.message` is the target message. `context.request` is the related request when the target is
@@ -81,19 +81,19 @@ console.log(verified.algorithm)
 `requiredComponents` matches the complete component identifier, including parameters, and ignores
 parameter order. `requiredParameters` checks presence only. `algorithms` must be a non-empty array
 of non-empty strings and is checked against the trusted verifier's algorithm, whether or not the
-signature carries `alg`; verification also fails when a signature's `alg` disagrees with the
+signature carries `alg`. Verification also fails when a signature's `alg` disagrees with the
 algorithm the verifier factory selected. All three arrays are required, and either of the first two
 may be empty. The policy shape is validated before any message is processed, so
 `createVerifyingFetch()` and `createSignedFetch()` reject an invalid policy when they are created.
 
 Timestamp checks work as follows:
 
-- `created` and `expires`, when present, must be integer UNIX timestamps;
-- `created` cannot be later than `now + clockSkew`;
-- `expires` cannot be earlier than `now - clockSkew` or earlier than `created`;
-- `maxAge` is optional; when set it requires `created` and rejects a signature older than
-  `maxAge + clockSkew`; and
-- `clockSkew` defaults to `0`.
+- `created` and `expires`, when present, must be integer UNIX timestamps
+- `created` cannot be later than `now + clockSkew`
+- `expires` cannot be earlier than `now - clockSkew` or earlier than `created`
+- `maxAge` is optional. When set it requires `created` and rejects a signature older than
+  `maxAge + clockSkew`
+- `clockSkew` defaults to `0`
 
 The clock is read again after cryptographic verification and after `policy.validate`, so a signature
 that expires while an asynchronous callback is running is still rejected.
