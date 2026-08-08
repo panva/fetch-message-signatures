@@ -2249,8 +2249,11 @@ function sfMemberFromStructuredField(member: StructuredFieldMember, path: string
  * @group Structured Fields
  */
 export function parseStructuredField(value: string, type: 'dictionary'): StructuredFieldDictionary
+/** Parses a field value as a Structured Field List. */
 export function parseStructuredField(value: string, type: 'list'): StructuredFieldList
+/** Parses a field value as a Structured Field Item. */
 export function parseStructuredField(value: string, type: 'item'): StructuredFieldItem
+/** Parses a field value whose top-level type is not known statically. */
 export function parseStructuredField(value: string, type: StructuredFieldType): StructuredFieldValue
 export function parseStructuredField(
   value: string,
@@ -2309,8 +2312,11 @@ export function serializeStructuredField(
   value: StructuredFieldDictionary,
   type: 'dictionary',
 ): string
+/** Serializes a Structured Field List. */
 export function serializeStructuredField(value: StructuredFieldList, type: 'list'): string
+/** Serializes a Structured Field Item. */
 export function serializeStructuredField(value: StructuredFieldItem, type: 'item'): string
+/** Serializes a value whose top-level type is not known statically. */
 export function serializeStructuredField(
   value: StructuredFieldValue,
   type: StructuredFieldType,
@@ -4685,6 +4691,7 @@ export function appendSignature(headers: Request, fields: SignatureFields): Requ
  * metadata such as `url`, `redirected`, and `type` cannot be preserved.
  */
 export function appendSignature(headers: Response, fields: SignatureFields): Response
+/** Adds one signature to a target whose type is not known statically. */
 export function appendSignature(
   headers: Headers | Request | Response,
   fields: SignatureFields,
@@ -4792,7 +4799,9 @@ export function appendSignature(
  * @group Sender
  */
 export function sign(message: Request, options: SignOptions): Promise<Request>
+/** Creates and appends one signature to a `Response`, returning a new `Response`. */
 export function sign(message: Response, options: SignOptions): Promise<Response>
+/** Creates and appends one signature to a message whose type is not known statically. */
 export function sign(message: Request | Response, options: SignOptions): Promise<Request | Response>
 export async function sign(
   message: Request | Response,
@@ -5411,10 +5420,12 @@ export function appendAcceptSignature(
   message: Request,
   requests: ReadonlyArray<SignatureRequestInput>,
 ): Request
+/** Adds `Accept-Signature` requests to a `Response` and returns a new `Response`. */
 export function appendAcceptSignature(
   message: Response,
   requests: ReadonlyArray<SignatureRequestInput>,
 ): Response
+/** Adds `Accept-Signature` requests to a message whose type is not known statically. */
 export function appendAcceptSignature(
   message: Request | Response,
   requests: ReadonlyArray<SignatureRequestInput>,
@@ -5653,11 +5664,13 @@ export function signRequested(
   request: SignatureRequest,
   options: RequestedSignOptions,
 ): Promise<Request>
+/** Fulfills and appends one requested signature on a `Response`. */
 export function signRequested(
   message: Response,
   request: SignatureRequest,
   options: RequestedSignOptions,
 ): Promise<Response>
+/** Fulfills and appends one requested signature on a message whose type is not known statically. */
 export function signRequested(
   message: Request | Response,
   request: SignatureRequest,

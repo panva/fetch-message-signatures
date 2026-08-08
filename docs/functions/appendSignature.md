@@ -97,7 +97,7 @@ metadata such as `url`, `redirected`, and `type` cannot be preserved.
 
 > **appendSignature**(`headers`, `fields`): `Request` ∣ `Response` ∣ `Headers`
 
-Adds one signature to `Headers` and returns a new `Headers` object.
+Adds one signature to a target whose type is not known statically.
 
 ### Parameters
 
@@ -109,31 +109,3 @@ Adds one signature to `Headers` and returns a new `Headers` object.
 ### Returns
 
 `Request` ∣ `Response` ∣ `Headers`
-
-### Example
-
-Existing signatures are kept, so several parties can sign the same message under distinct labels.
-A label that is already present is rejected rather than overwritten.
-
-```ts
-declare const request: Request
-declare const applicationSigner: FetchSig.SignerFactory
-declare const auditSigner: FetchSig.SignerFactory
-
-const application = await FetchSig.createSignature(request, {
-  label: 'application',
-  signer: applicationSigner,
-  components: ['@method', '@authority', '@path'],
-})
-let headers = FetchSig.appendSignature(request.headers, application)
-
-const audit = await FetchSig.createSignature(new Request(request, { headers }), {
-  label: 'audit',
-  signer: auditSigner,
-  components: ['@method', '@target-uri'],
-})
-headers = FetchSig.appendSignature(headers, audit)
-
-// application=("@method" "@authority" "@path");created=…, audit=("@method" "@target-uri");created=…
-console.log(headers.get('signature-input'))
-```
