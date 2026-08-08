@@ -9,6 +9,9 @@ ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and RSASSA-PKCS1-v1_5 with SHA-256. 
 cryptography can be supplied through custom providers. Trusted-key selection and authorization
 remain application responsibilities.
 
+RFC 9421 is built on Structured Fields ([RFC 9651][]), and the parser and serializer behind it are
+exported for HTTP fields this module does not define.
+
 ## [💗 Help the project](https://github.com/sponsors/panva)
 
 Support from the community to continue maintaining and improving this module is welcome. If you find
@@ -90,8 +93,8 @@ returns exactly that string, which is the first thing to compare when two implem
 
 ## [Guides](guides/README.md)
 
-For sender and recipient integration, cryptographic providers, component selection,
-`Accept-Signature`, Fetch behavior, and security guidance, see the
+For sender and recipient integration, cryptographic providers, component selection, Structured
+Fields, `Accept-Signature`, Fetch behavior, and security guidance, see the
 [guides directory](guides/README.md).
 
 ## Runtime Requirements
@@ -119,6 +122,7 @@ repeated field lines, trailers, and response reconstruction, is documented in
 - Create, parse, append, and fulfill `Accept-Signature` requests.
 - Derive RFC 9421 request and response components from Fetch messages.
 - Process HTTP fields as Structured Fields, dictionary members, raw byte sequences, or trailers.
+- Parse and serialize Structured Field Dictionaries, Lists, and Items.
 - Wrap `fetch` with request signing, response verification, or both through independent
   tree-shakeable exports.
 
@@ -151,6 +155,8 @@ signatures across a network boundary. Security vulnerabilities should be reporte
 ## Specifications
 
 - [HTTP Message Signatures (RFC 9421)][RFC 9421]
+- [Structured Field Values for HTTP (RFC 9651)][RFC 9651]
 
 [RFC 9421]: https://www.rfc-editor.org/info/rfc9421/
+[RFC 9651]: https://www.rfc-editor.org/info/rfc9651/
 [Security Policy]: https://github.com/panva/fetch-message-signatures/security/policy
