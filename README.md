@@ -32,38 +32,26 @@ module.
 
 ## Quick Start
 
-Sign every outgoing request and send it. `createSignedFetch()` returns a drop-in `fetch`, so the
-signing and verification happen around the call you already make.
+Sign every outgoing request and send it. `createSigningFetch()` returns a drop-in `fetch`, so the
+signing happens around the call you already make.
 
 ```ts
 import * as FetchSig from 'fetch-message-signatures'
 
-// 1. Your signing key, and the public key of the server you are calling
+// 1. Your signing key
 const { privateKey } = await FetchSig.generateEd25519KeyPair()
-declare const serverPublicKey: CryptoKey
 
-// 2. Wrap fetch. `sign` covers the request, `verify` covers the response it gets back
-const signedFetch = FetchSig.createSignedFetch({
+// 2. Wrap fetch
+const signingFetch = FetchSig.createSigningFetch({
   sign: {
     signer: FetchSig.ed25519Signer(privateKey),
     components: ['@method', '@authority', '@path'],
     parameters: { alg: 'ed25519', keyid: 'client-key' },
   },
-  verify: {
-    verifier: FetchSig.ed25519Verifier(serverPublicKey),
-    policy: {
-      // ";req" binds the response to the request that produced it
-      requiredComponents: ['@status', FetchSig.component('@path', { req: true })],
-      requiredParameters: ['created', 'keyid'],
-      algorithms: ['ed25519'],
-      maxAge: 60,
-    },
-  },
 })
 
-// 3. Send it. The request goes out signed, and this rejects rather than resolving if the
-//    response is missing a signature, carries a bad one, or fails the policy above
-const response = await signedFetch('https://api.example/orders/123')
+// 3. Send it, exactly like fetch. The request goes out signed.
+const response = await signingFetch('https://api.example/orders/123')
 const order = await response.json()
 ```
 
@@ -74,11 +62,38 @@ signature-input: sig1=("@method" "@authority" "@path");created=1735689600;alg="e
 signature:       sig1=:<base64 of the 64 Ed25519 signature bytes>:
 ```
 
-Drop `verify` to sign without checking responses, or use
-[`createSigningFetch()`](docs/functions/createSigningFetch.md) and
-[`createVerifyingFetch()`](docs/functions/createVerifyingFetch.md) for a single direction so a
-bundler can omit the other. To sign or verify a message you already hold, rather than wrapping
-`fetch`, use [`sign()`](docs/functions/sign.md) and [`verify()`](docs/functions/verify.md).
+The recipient checks that signature against explicit policy. A valid signature on its own is not
+enough: the components it covers and the parameters it carries have to be the ones the application
+requires, which is why the policy is spelled out rather than defaulted.
+
+```ts
+declare const incoming: Request
+declare const clientPublicKey: CryptoKey
+
+const verified = await FetchSig.verify(incoming, {
+  verifier: FetchSig.ed25519Verifier(clientPublicKey),
+  policy: {
+    requiredComponents: ['@method', '@authority', '@path'],
+    requiredParameters: ['created', 'keyid'],
+    algorithms: ['ed25519'],
+    maxAge: 60,
+  },
+})
+
+// sig1 ed25519
+console.log(verified.label, verified.algorithm)
+```
+
+A recipient that accepts more than one client selects the trusted key itself, from the signature's
+`keyid`. That is what [`VerifierFactory`](docs/type-aliases/VerifierFactory.md) is for, and the
+[recipient guide](guides/recipient.md) covers it.
+
+Signing requests is the common direction, because it only asks the recipient to verify. When the
+server signs its responses too, [`createSignedFetch()`](docs/functions/createSignedFetch.md) adds
+verification on the way back in, and
+[`createVerifyingFetch()`](docs/functions/createVerifyingFetch.md) does that alone so a bundler can
+omit the signing side. To sign a message you already hold, rather than wrapping `fetch`, use
+[`sign()`](docs/functions/sign.md).
 
 The bytes that were signed are one canonicalized line per covered component plus the
 `@signature-params` line, which repeats the `Signature-Input` member value. `createSignatureBase()`

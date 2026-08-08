@@ -52,40 +52,35 @@
  *
  * Send signed requests through `fetch`. Three wrappers cover the three directions:
  *
- * | wrapper                  | outgoing request | incoming response |
- * | ------------------------ | ---------------- | ----------------- |
- * | `createSigningFetch()`   | signed           | not verified      |
- * | `createVerifyingFetch()` | not signed       | verified          |
- * | `createSignedFetch()`    | signed           | verified          |
+ * | wrapper                      | outgoing request | incoming response |
+ * | ---------------------------- | ---------------- | ----------------- |
+ * | {@link createSigningFetch}   | signed           | not verified      |
+ * | {@link createVerifyingFetch} | not signed       | verified          |
+ * | {@link createSignedFetch}    | signed           | verified          |
+ *
+ * Signing outgoing requests is the common case, because it only requires the recipient to verify.
+ * Verifying responses additionally requires the server to sign them.
  *
  * ```ts
  * import * as FetchSig from 'fetch-message-signatures'
  *
  * declare const clientPrivateKey: CryptoKey
- * declare const serverPublicKey: CryptoKey
  *
- * const signedFetch = FetchSig.createSignedFetch({
+ * const signingFetch = FetchSig.createSigningFetch({
  *   sign: {
  *     signer: FetchSig.ed25519Signer(clientPrivateKey),
  *     components: ['@method', '@authority', '@path'],
  *     parameters: { alg: 'ed25519', keyid: 'client-key' },
  *   },
- *   verify: {
- *     verifier: FetchSig.ed25519Verifier(serverPublicKey),
- *     policy: {
- *       requiredComponents: ['@status', FetchSig.component('@path', { req: true })],
- *       requiredParameters: ['created', 'keyid'],
- *       algorithms: ['ed25519'],
- *       maxAge: 60,
- *     },
- *   },
  * })
  *
- * // Used exactly like fetch. The request is signed on the way out, and the response is
- * // verified against that exact request before this resolves.
- * const response = await signedFetch('https://api.example/orders/123')
+ * // Used exactly like fetch. The request is signed on the way out.
+ * const response = await signingFetch('https://api.example/orders/123')
  * const order = await response.json()
  * ```
+ *
+ * When the server signs its responses too, {@link createSignedFetch} takes the same `sign` options
+ * plus a `verify` block, and checks the response against the exact request that produced it.
  */
 
 const encoder = /* @__PURE__ */ new TextEncoder()
