@@ -9,8 +9,12 @@
     "deno",
     "fetch",
     "http",
+    "httpsig",
+    "message",
+    "node",
     "rfc9421",
     "signature",
+    "signatures",
     "webcrypto",
     "workerd"
   ],
