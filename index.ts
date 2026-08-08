@@ -2854,6 +2854,36 @@ function componentFromSfItem(item: SfItem): MessageComponent {
  * Converts a message component identifier into the Structured Field Item used for its signature
  * base line and for its entry in the `@signature-params` Inner List.
  */
+function serializeComponentIdentifier(identifier: MessageComponent): string {
+  // The name has already been through validateComponentName(), so it is either a known derived
+  // component or a lowercase HTTP field name. Neither character set contains a quote or a
+  // backslash, so the generic String serializer's escaping pass has nothing to do.
+  let output = `"${identifier.name}"`
+  for (const [name, value] of identifier.parameters) {
+    output += `;${serializeKey(name)}`
+    if (value === true) {
+      continue
+    }
+    output += typeof value === 'string' ? `=${serializeString(value)}` : '=?0'
+  }
+  return output
+}
+
+/**
+ * Serializes the `@signature-params` value from identifiers that have already been serialized for
+ * their own base lines.
+ *
+ * Every covered component appears twice in a signature base, once as the line carrying its value
+ * and once inside the `@signature-params` Inner List. Serializing each identifier once and reusing
+ * the string halves that work.
+ */
+function serializeSignatureParams(
+  identifiers: ReadonlyArray<string>,
+  parameters: SfParameters,
+): string {
+  return `(${identifiers.join(' ')})${serializeParameters(parameters)}`
+}
+
 function componentToSfItem(identifier: MessageComponent): SfItem {
   return {
     kind: 'item',
@@ -3137,10 +3167,15 @@ function assertUniqueComponents(components: ReadonlyArray<MessageComponent>): vo
     const parameters = componentParameterMap(identifier)
 
     // Parameter order is ignored, because RFC 9651 parameters are an ordered map keyed by name.
-    const canonical = JSON.stringify([
-      identifier.name,
-      [...parameters].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
-    ])
+    // A bare name can never collide with the serialized form of a parameterized identifier,
+    // because a component name cannot start with "[".
+    const canonical =
+      identifier.parameters.length === 0
+        ? identifier.name
+        : JSON.stringify([
+            identifier.name,
+            [...parameters].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+          ])
     if (identifiers.has(canonical)) {
       fail(`Duplicate covered component "${identifier.name}"`)
     }
@@ -3507,6 +3542,22 @@ function assertFieldValue(value: string, name: string): void {
 }
 
 /**
+ * Rejects a resolved component value that cannot appear in a signature base.
+ *
+ * This is where non-ASCII is caught. Every other input to a base is ASCII by construction, so once
+ * each component value has been through here the assembled base needs no scan of its own. It runs
+ * on the resolved value rather than on each field occurrence, because `bs` signs the raw octets of
+ * a field line and puts base64 in the base, so a non-ASCII value is legal there.
+ */
+function assertBaseValue(value: string, name: string): void {
+  if (!/[^\t\x20-\x7e]/.test(value)) {
+    return
+  }
+  assertFieldValue(value, name)
+  fail(`HTTP field "${name}" contains a non-ASCII character`)
+}
+
+/**
  * Reads a field's occurrences from a Fetch message without an application adapter.
  *
  * Fetch combines repeated field lines into one value, so this returns at most one entry, except for
@@ -3745,7 +3796,7 @@ function resolveComponentValue(
   } else {
     value = deriveFieldComponentValue(identifier, source, relatedRequest, options, derivations)
   }
-  assertFieldValue(value, identifier.name)
+  assertBaseValue(value, identifier.name)
   return value
 }
 
@@ -3753,7 +3804,13 @@ function resolveComponentValue(
  * Builds the RFC 9421 signature base: one canonicalized line per covered component, followed by the
  * `@signature-params` line.
  *
- * The whole result must be ASCII, which is where a non-ASCII field value is rejected.
+ * Each identifier is serialized before its value is resolved, following the order of RFC 9421
+ * Section 2.5: an identifier that cannot be serialized is the caller's input error and is reported
+ * as one, without consulting the message or invoking a `fieldValues` adapter for it. The serialized
+ * form is then reused for both the component line and the `@signature-params` line.
+ *
+ * Each resolved value is checked for non-ASCII as it is produced, so the assembled base needs no
+ * scan of its own.
  *
  * Target URI derivations are memoized for this one base, so a long covered component list cannot
  * make URI and query string parsing quadratic. The memo is per call, so every rebuild performed by
@@ -3767,16 +3824,14 @@ function buildSignatureBase(
 ): string {
   assertUniqueComponents(components)
   const derivations = createBaseDerivations()
+  const identifiers: string[] = []
   let output = ''
   for (const identifier of components) {
-    const serializedIdentifier = serializeItem(componentToSfItem(identifier))
-    const value = resolveComponentValue(identifier, message, options, derivations)
-    output += `${serializedIdentifier}: ${value}\n`
+    const serializedIdentifier = serializeComponentIdentifier(identifier)
+    identifiers.push(serializedIdentifier)
+    output += `${serializedIdentifier}: ${resolveComponentValue(identifier, message, options, derivations)}\n`
   }
-  output += `"@signature-params": ${serializeInnerList(
-    signatureParametersInnerList(components, parameters),
-  )}`
-  assertAscii(output, 'Signature base')
+  output += `"@signature-params": ${serializeSignatureParams(identifiers, parameters)}`
   return output
 }
 

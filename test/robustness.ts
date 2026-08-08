@@ -405,6 +405,44 @@ describe('derived-component and field boundaries', () => {
     )
   })
 
+  it('rejects an unserializable identifier before it reads the message', () => {
+    // RFC 9421 Section 2.5 serializes the identifier before deriving its value. Resolving first
+    // would report a message-dependent error for a caller input error, and would run the adapter.
+    let calls = 0
+
+    assert.throws(
+      () =>
+        createSignatureBase(requestFixture(), {
+          components: [component('x-dict', { key: '\u00e9' })],
+          fieldValues() {
+            calls++
+            return ['a=1']
+          },
+        }),
+      /Structured Field String must contain only printable ASCII characters/,
+    )
+    assert.equal(calls, 0)
+  })
+
+  it('rejects a non-ASCII field value in the base, but not its ;bs form', () => {
+    // The signature base is ASCII, so a plain field value carrying \xff cannot appear in it. Under
+    // ;bs the same octet is signed as base64, which is why the check runs per resolved value rather
+    // than once over the assembled base.
+    const fieldValues = () => ['\xff']
+
+    assert.throws(
+      () => createSignatureBase(requestFixture(), { components: ['x-raw'], fieldValues }),
+      /HTTP field "x-raw" contains a non-ASCII character/,
+    )
+    assert.match(
+      createSignatureBase(requestFixture(), {
+        components: [component('x-raw', { bs: true })],
+        fieldValues,
+      }),
+      /^"x-raw";bs: :\/w==:$/m,
+    )
+  })
+
   it('rejects non-octet raw field values under ;bs', () => {
     assert.throws(
       () =>
