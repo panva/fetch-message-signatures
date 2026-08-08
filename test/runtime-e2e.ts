@@ -7,6 +7,7 @@ import {
   ed25519Signer,
   ed25519Verifier,
   generateEd25519KeyPair,
+  getSignatureParameter,
   getSignatureRequests,
   signRequested,
   verify,
@@ -80,13 +81,6 @@ function assertion(condition: unknown, message: string): asserts condition {
   }
 }
 
-function parameter(
-  signature: Readonly<MessageSignature>,
-  name: string,
-): SignatureParameterValue | undefined {
-  return signature.parameters.find(([parameterName]) => parameterName === name)?.[1]
-}
-
 function verifierForKey(
   key: CryptoKey,
   expectedKeyId: string,
@@ -95,7 +89,7 @@ function verifierForKey(
   const verifier = ed25519Verifier(key)
   return (signature, context) => {
     assertion(
-      parameter(signature, 'keyid') === expectedKeyId,
+      getSignatureParameter(signature, 'keyid') === expectedKeyId,
       `expected signature keyid "${expectedKeyId}"`,
     )
     const selected = verifier(signature, context)

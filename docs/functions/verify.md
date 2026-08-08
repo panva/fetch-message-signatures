@@ -38,7 +38,7 @@ const verified = await FetchSig.verify(request, {
     clockSkew: 5,
     async validate(signature, context) {
       // Runs only after the signature is cryptographically valid, so the nonce is authentic.
-      const nonce = signature.parameters.find(([name]) => name === 'nonce')?.[1]
+      const nonce = FetchSig.getSignatureParameter(signature, 'nonce')
       if (typeof nonce !== 'string') {
         throw new Error('A nonce is required')
       }

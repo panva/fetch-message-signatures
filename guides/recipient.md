@@ -14,7 +14,7 @@ succeeds.
 declare const trustedKeys: ReadonlyMap<string, CryptoKey>
 
 const verifier: FetchSig.VerifierFactory = (signature, context) => {
-  const keyid = signature.parameters.find(([name]) => name === 'keyid')?.[1]
+  const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
   if (typeof keyid !== 'string') {
     throw new Error('A key identifier is required')
   }
@@ -64,7 +64,7 @@ const verified = await FetchSig.verify(request, {
     maxAge: 60,
     clockSkew: 5,
     async validate(signature, context) {
-      const nonce = signature.parameters.find(([name]) => name === 'nonce')?.[1]
+      const nonce = FetchSig.getSignatureParameter(signature, 'nonce')
       if (typeof nonce !== 'string') {
         throw new Error('A nonce is required')
       }
