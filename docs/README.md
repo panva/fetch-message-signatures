@@ -5,8 +5,8 @@ HTTP Message Signatures for the Fetch API.
 Implements the sender, recipient, and `Accept-Signature` operations from [RFC
 9421](https://www.rfc-editor.org/info/rfc9421/) on top of `Request`, `Response`, `Headers`, and
 `fetch`. The module constructs and parses the required Structured Fields, includes Web
-Cryptography implementations of the ECDSA and Ed25519 signature algorithms, and supports custom
-cryptographic providers.
+Cryptography implementations of the ECDSA, Ed25519, and RSA signature algorithms, and supports
+custom cryptographic providers.
 
 ## Examples
 
@@ -146,6 +146,12 @@ const order = await response.json()
 | [generateEcdsaP256Sha256KeyPair](functions/generateEcdsaP256Sha256KeyPair.md) | Generates an ECDSA P-256 key pair for the RFC 9421 `ecdsa-p256-sha256` algorithm. |
 | [generateEcdsaP384Sha384KeyPair](functions/generateEcdsaP384Sha384KeyPair.md) | Generates an ECDSA P-384 key pair for the RFC 9421 `ecdsa-p384-sha384` algorithm. |
 | [generateEd25519KeyPair](functions/generateEd25519KeyPair.md) | Generates an Ed25519 key pair for the RFC 9421 `ed25519` algorithm. |
+| [generateRsaPssSha512KeyPair](functions/generateRsaPssSha512KeyPair.md) | Generates an RSA key pair for the RFC 9421 `rsa-pss-sha512` algorithm. |
+| [generateRsaV1\_5Sha256KeyPair](functions/generateRsaV1_5Sha256KeyPair.md) | Generates an RSA key pair for the RFC 9421 `rsa-v1_5-sha256` algorithm. |
+| [rsaPssSha512Signer](functions/rsaPssSha512Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `rsa-pss-sha512`. |
+| [rsaPssSha512Verifier](functions/rsaPssSha512Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `rsa-pss-sha512`. |
+| [rsaV1\_5Sha256Signer](functions/rsaV1_5Sha256Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `rsa-v1_5-sha256`. |
+| [rsaV1\_5Sha256Verifier](functions/rsaV1_5Sha256Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `rsa-v1_5-sha256`. |
 
 ## Interfaces
 

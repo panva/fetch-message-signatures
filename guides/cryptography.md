@@ -1,11 +1,12 @@
 # Cryptographic providers
 
 `fetch-message-signatures` includes key-pair generators, signer factories, and verifier factories
-backed by Web Cryptography for ECDSA P-256, ECDSA P-384, and Ed25519. RSA, HMAC, and other
-cryptographic implementations plug into sender and recipient operations through the same small
-provider interfaces. A synchronous `SignerFactory` returns a signer with `alg` and an asynchronous
-`sign()` method. A synchronous `VerifierFactory` selects trusted key material and returns a verifier
-with `alg` and an asynchronous `verify()` method.
+backed by Web Cryptography for ECDSA P-256, ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and
+RSASSA-PKCS1-v1_5 with SHA-256. HMAC and other cryptographic implementations plug into sender and
+recipient operations through the same small provider interfaces. A synchronous `SignerFactory`
+returns a signer with `alg` and an asynchronous `sign()` method. A synchronous `VerifierFactory`
+selects trusted key material and returns a verifier with `alg` and an asynchronous `verify()`
+method.
 
 The exported algorithm functions map RFC algorithm identifiers to Web Cryptography parameters and
 signature encoding. The application remains responsible for persistent key storage, key rotation,
@@ -20,6 +21,8 @@ Each built-in algorithm has one key generator, one signer factory, and one verif
 | `ecdsa-p256-sha256` | [`generateEcdsaP256Sha256KeyPair`](../docs/functions/generateEcdsaP256Sha256KeyPair.md) | [`ecdsaP256Sha256Signer`](../docs/functions/ecdsaP256Sha256Signer.md) / [`ecdsaP256Sha256Verifier`](../docs/functions/ecdsaP256Sha256Verifier.md) |
 | `ecdsa-p384-sha384` | [`generateEcdsaP384Sha384KeyPair`](../docs/functions/generateEcdsaP384Sha384KeyPair.md) | [`ecdsaP384Sha384Signer`](../docs/functions/ecdsaP384Sha384Signer.md) / [`ecdsaP384Sha384Verifier`](../docs/functions/ecdsaP384Sha384Verifier.md) |
 | `ed25519`           | [`generateEd25519KeyPair`](../docs/functions/generateEd25519KeyPair.md)                 | [`ed25519Signer`](../docs/functions/ed25519Signer.md) / [`ed25519Verifier`](../docs/functions/ed25519Verifier.md)                                 |
+| `rsa-pss-sha512`    | [`generateRsaPssSha512KeyPair`](../docs/functions/generateRsaPssSha512KeyPair.md)       | [`rsaPssSha512Signer`](../docs/functions/rsaPssSha512Signer.md) / [`rsaPssSha512Verifier`](../docs/functions/rsaPssSha512Verifier.md)             |
+| `rsa-v1_5-sha256`   | [`generateRsaV1_5Sha256KeyPair`](../docs/functions/generateRsaV1_5Sha256KeyPair.md)     | [`rsaV1_5Sha256Signer`](../docs/functions/rsaV1_5Sha256Signer.md) / [`rsaV1_5Sha256Verifier`](../docs/functions/rsaV1_5Sha256Verifier.md)         |
 
 ## Keys
 
@@ -38,11 +41,26 @@ transport, so opt in only when the application's key-management design requires 
 All generators request only the usages needed here: `sign` on private keys and `verify` on public
 keys.
 
+The two RSA generators take a second optional argument, the modulus length in bits, and use a public
+exponent of 65537:
+
+```ts
+const defaultLength = await FetchSig.generateRsaPssSha512KeyPair()
+const longer = await FetchSig.generateRsaPssSha512KeyPair(false, 4096)
+```
+
+It defaults to 2048. Which lengths can actually be generated is up to the Web Cryptography
+implementation. RSA-PSS with SHA-512 and a 64-byte salt needs at least a 1040-bit modulus to encode
+a signature, so a shorter key fails when it signs rather than when it is generated. The signer and
+verifier factories accept a key of any modulus length, so a key that comes from elsewhere does not
+have to match the default.
+
 Imported, deserialized, and hardware-backed instances of Web Cryptography's `CryptoKey` work with
 the same factories. Import the key using the Web Cryptography algorithm that matches the RFC
-identifier. ECDSA keys also bind their named curve. Common import formats are `spki` for an
-asymmetric public key, `pkcs8` for an asymmetric private key, and `jwk` when the surrounding
-protocol defines JWK use. RFC 9421 does not define public-key formats or key distribution.
+identifier. ECDSA keys also bind their named curve, and RSA keys their digest. Common import formats
+are `spki` for an asymmetric public key, `pkcs8` for an asymmetric private key, and `jwk` when the
+surrounding protocol defines JWK use. RFC 9421 does not define public-key formats or key
+distribution.
 
 For example, an Ed25519 key pair can be used directly:
 
@@ -94,19 +112,23 @@ factory may return a Promise, so a key can be fetched or refreshed there, but th
 reaches must come from configuration rather than from the message.
 
 Built-in signer and verifier functions synchronously validate the key type, required usage, Web
-Cryptography algorithm, and named curve. A P-384 ECDSA key therefore cannot be used with the
-`ecdsa-p256-sha256` identifier.
+Cryptography algorithm, named curve, and digest. A P-384 ECDSA key therefore cannot be used with the
+`ecdsa-p256-sha256` identifier, and an RSA-PSS key created for SHA-256 cannot be used with
+`rsa-pss-sha512`.
 
 ## Custom providers
 
 RFC 9421 defines `rsa-pss-sha512`, `rsa-v1_5-sha256`, `hmac-sha256`, `ecdsa-p256-sha256`,
-`ecdsa-p384-sha384`, and `ed25519`. Later registry entries can be used through application-supplied
-providers without a package release. Accepting an identifier does not supply its cryptography. RSA
-and HMAC require custom providers.
+`ecdsa-p384-sha384`, and `ed25519`. Of those, `hmac-sha256` is the one this package does not
+provide. Other identifiers can be used through application-supplied providers without a package
+release. Accepting an identifier does not supply its cryptography.
 
-RSA-PSS uses SHA-512, MGF1 with SHA-512, and a 64-byte salt. RSASSA-PKCS1-v1_5 and HMAC use SHA-256.
-For new designs, prefer RSA-PSS or Ed25519 over `rsa-v1_5-sha256`. RFC 9421 describes RSA PKCS#1
-v1.5 as weaker and warns about
+HMAC uses SHA-256. A shared MAC key gives no non-repudiation, because any party that can verify can
+also forge, which is why it is left to a custom provider rather than sitting next to the asymmetric
+factories.
+
+For new designs, prefer `ed25519` or `rsa-pss-sha512` over `rsa-v1_5-sha256`. RFC 9421 describes RSA
+PKCS#1 v1.5 as weaker and warns about
 [algorithm downgrade attacks](https://www.rfc-editor.org/info/rfc9421/#section-7.3.6). Bind each key
 to its algorithm in trusted configuration and keep the verification allowlist narrow.
 

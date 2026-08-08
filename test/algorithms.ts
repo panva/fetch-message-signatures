@@ -18,6 +18,12 @@ import {
   generateEcdsaP256Sha256KeyPair,
   generateEcdsaP384Sha384KeyPair,
   generateEd25519KeyPair,
+  generateRsaPssSha512KeyPair,
+  generateRsaV1_5Sha256KeyPair,
+  rsaPssSha512Signer,
+  rsaPssSha512Verifier,
+  rsaV1_5Sha256Signer,
+  rsaV1_5Sha256Verifier,
   sign,
   verify,
   type MessageSignature,
@@ -41,6 +47,10 @@ interface AlgorithmCase {
 
 function ecAlgorithm(key: CryptoKey): EcKeyAlgorithm {
   return key.algorithm as EcKeyAlgorithm
+}
+
+function rsaAlgorithm(key: CryptoKey): RsaHashedKeyAlgorithm {
+  return key.algorithm as RsaHashedKeyAlgorithm
 }
 
 const algorithms: ReadonlyArray<AlgorithmCase> = [
@@ -85,6 +95,40 @@ const algorithms: ReadonlyArray<AlgorithmCase> = [
     verifier: ed25519Verifier,
     assertAlgorithm(key) {
       assert.equal(key.algorithm.name, 'Ed25519')
+    },
+  },
+  {
+    identifier: 'rsa-pss-sha512',
+    signatureLength: 256,
+    async generate(extractable) {
+      const pair = await generateRsaPssSha512KeyPair(extractable)
+      return { signingKey: pair.privateKey, verificationKey: pair.publicKey }
+    },
+    signer: rsaPssSha512Signer,
+    verifier: rsaPssSha512Verifier,
+    assertAlgorithm(key) {
+      const algorithm = rsaAlgorithm(key)
+      assert.equal(algorithm.name, 'RSA-PSS')
+      assert.equal(algorithm.hash.name, 'SHA-512')
+      assert.equal(algorithm.modulusLength, 2048)
+      assert.deepEqual(new Uint8Array(algorithm.publicExponent), new Uint8Array([1, 0, 1]))
+    },
+  },
+  {
+    identifier: 'rsa-v1_5-sha256',
+    signatureLength: 256,
+    async generate(extractable) {
+      const pair = await generateRsaV1_5Sha256KeyPair(extractable)
+      return { signingKey: pair.privateKey, verificationKey: pair.publicKey }
+    },
+    signer: rsaV1_5Sha256Signer,
+    verifier: rsaV1_5Sha256Verifier,
+    assertAlgorithm(key) {
+      const algorithm = rsaAlgorithm(key)
+      assert.equal(algorithm.name, 'RSASSA-PKCS1-v1_5')
+      assert.equal(algorithm.hash.name, 'SHA-256')
+      assert.equal(algorithm.modulusLength, 2048)
+      assert.deepEqual(new Uint8Array(algorithm.publicExponent), new Uint8Array([1, 0, 1]))
     },
   },
 ]
@@ -167,7 +211,7 @@ describe('Web Cryptography algorithm helpers', () => {
     }
   })
 
-  it('signs and verifies bytes with all three algorithms', async () => {
+  it('signs and verifies bytes with every built-in algorithm', async () => {
     for (const algorithm of algorithms) {
       const keys = await keysFor(algorithm)
       const signerFactory = algorithm.signer(keys.signingKey)
@@ -189,7 +233,7 @@ describe('Web Cryptography algorithm helpers', () => {
     }
   })
 
-  it('round trips complete HTTP message signatures with all three algorithms', async () => {
+  it('round trips complete HTTP message signatures with every built-in algorithm', async () => {
     for (const algorithm of algorithms) {
       const keys = await keysFor(algorithm)
       const signed = await sign(
@@ -308,5 +352,65 @@ describe('Web Cryptography algorithm helpers', () => {
     assert.throws(() => ecdsaP256Sha256Verifier(p384.verificationKey), /ecdsa-p256-sha256/)
     assert.throws(() => ecdsaP384Sha384Signer(p256.signingKey), /ecdsa-p384-sha384/)
     assert.throws(() => ecdsaP384Sha384Verifier(p256.verificationKey), /ecdsa-p384-sha384/)
+  })
+
+  it('rejects RSA keys bound to the wrong padding or digest synchronously', async () => {
+    const [pss, v15] = await Promise.all([
+      keysFor(algorithmCase('rsa-pss-sha512')),
+      keysFor(algorithmCase('rsa-v1_5-sha256')),
+    ])
+    // An RSA-PSS key carries its digest, and signing with the wrong one would name a digest the
+    // signature was not computed with.
+    const pssSha256 = (await crypto.subtle.generateKey(
+      {
+        name: 'RSA-PSS',
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: 'SHA-256',
+      },
+      false,
+      ['sign', 'verify'],
+    )) as CryptoKeyPair
+
+    assert.throws(() => rsaPssSha512Signer(v15.signingKey), /rsa-pss-sha512/)
+    assert.throws(() => rsaPssSha512Verifier(v15.verificationKey), /rsa-pss-sha512/)
+    assert.throws(() => rsaV1_5Sha256Signer(pss.signingKey), /rsa-v1_5-sha256/)
+    assert.throws(() => rsaV1_5Sha256Verifier(pss.verificationKey), /rsa-v1_5-sha256/)
+    assert.throws(() => rsaPssSha512Signer(pssSha256.privateKey), /rsa-pss-sha512/)
+    assert.throws(() => rsaPssSha512Verifier(pssSha256.publicKey), /rsa-pss-sha512/)
+  })
+
+  it('generates RSA keys at a requested modulus length', async () => {
+    const [pss, v15] = await Promise.all([
+      generateRsaPssSha512KeyPair(false, 3072),
+      generateRsaV1_5Sha256KeyPair(false, 3072),
+    ])
+
+    for (const pair of [pss, v15]) {
+      assert.equal(rsaAlgorithm(pair.privateKey).modulusLength, 3072)
+      assert.equal(rsaAlgorithm(pair.publicKey).modulusLength, 3072)
+    }
+
+    // An RSA signature is exactly as long as the modulus, so the requested length reaches the wire.
+    assert.equal((await rsaPssSha512Signer(pss.privateKey)().sign(message)).byteLength, 384)
+    assert.equal((await rsaV1_5Sha256Signer(v15.privateKey)().sign(message)).byteLength, 384)
+  })
+
+  it('rejects invalid modulus lengths in both RSA key generators', async () => {
+    const generators = [generateRsaPssSha512KeyPair, generateRsaV1_5Sha256KeyPair]
+    const invalidValues = [null, '2048', 2048.5, 0, -2048, Number.NaN, {}]
+
+    for (const generate of generators) {
+      const generateWith = generate as unknown as (
+        extractable: boolean,
+        modulusLength: unknown,
+      ) => Promise<CryptoKeyPair>
+      for (const invalid of invalidValues) {
+        await assert.rejects(generateWith(false, invalid), {
+          name: 'TypeError',
+          message: '"modulusLength" must be a positive integer',
+        })
+      }
+    }
   })
 })
