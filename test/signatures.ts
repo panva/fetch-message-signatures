@@ -18,6 +18,7 @@ import {
   token,
   verify,
 } from '../index.ts'
+import type { VerifierFactory } from '../index.ts'
 import {
   REQUEST_CARRIES_FORBIDDEN_FIELDS,
   RFC_CREATED,
@@ -201,6 +202,69 @@ describe('signature field parsing and pairing', () => {
     )
   })
 
+  it('rejects missing or mismatched Signature and Signature-Input fields', () => {
+    assert.throws(
+      () => getSignatures(signedHeaders('sig1=("@method")', null)),
+      /must both be present/,
+    )
+    assert.throws(() => getSignatures(signedHeaders(null, 'sig1=:AA==:')), /must both be present/)
+    assert.throws(
+      () => getSignatures(signedHeaders('sig1=("@method")', 'different=:AA==:')),
+      /must contain identical labels/,
+    )
+  })
+})
+
+describe('verifier factory contract', () => {
+  it('awaits a verifier factory that resolves a key', async () => {
+    // Key rotation may mean fetching or refreshing a key, so the factory may return a Promise.
+    let resolved = 0
+    const signed = await sign(new Request('https://example.com/'), {
+      signer: webCryptoSigner(),
+      components: ['@method'],
+      parameters: { created: RFC_CREATED, keyid: 'rotating-key' },
+    })
+
+    const verified = await verify(signed, {
+      verifier: async (signature, context) => {
+        const keyid = getSignatureParameter(signature, 'keyid')
+        assert.equal(keyid, 'rotating-key')
+        await Promise.resolve()
+        resolved++
+        return webCryptoVerifier()(signature, context)
+      },
+      policy: verificationPolicy({ requiredComponents: ['@method'] }),
+    })
+
+    assert.equal(resolved, 1)
+    assert.equal(verified.label, 'sig1')
+  })
+
+  it('reports a rejected factory as the cause, like a thrown one', async () => {
+    const signed = await sign(new Request('https://example.com/'), {
+      signer: webCryptoSigner(),
+      components: ['@method'],
+      parameters: { created: RFC_CREATED },
+    })
+
+    for (const verifier of [
+      () => Promise.reject(new Error('key service unavailable')),
+      () => {
+        throw new Error('key service unavailable')
+      },
+    ] as VerifierFactory[]) {
+      await assert.rejects(
+        verify(signed, { verifier, policy: verificationPolicy() }),
+        (error: unknown) => {
+          assert.ok(error instanceof TypeError)
+          assert.equal(error.message, 'Invalid "verifier"')
+          assert.equal((error.cause as Error).message, 'key service unavailable')
+          return true
+        },
+      )
+    }
+  })
+
   it('reads a metadata parameter without reproducing the ordered-list shape', () => {
     const [parsed] = parseSignatureInput(
       'sig1=("@method");created=1618884473;keyid="client-key";alg="ed25519"',
@@ -213,17 +277,6 @@ describe('signature field parsing and pairing', () => {
     assert.equal(getSignatureParameter(signature, 'nonce'), undefined)
     assert.throws(() => getSignatureParameter(null as never, 'keyid'), /must be a MessageSignature/)
     assert.throws(() => getSignatureParameter(signature, 1 as never), /"name" must be a string/)
-  })
-  it('rejects missing or mismatched Signature and Signature-Input fields', () => {
-    assert.throws(
-      () => getSignatures(signedHeaders('sig1=("@method")', null)),
-      /must both be present/,
-    )
-    assert.throws(() => getSignatures(signedHeaders(null, 'sig1=:AA==:')), /must both be present/)
-    assert.throws(
-      () => getSignatures(signedHeaders('sig1=("@method")', 'different=:AA==:')),
-      /must contain identical labels/,
-    )
   })
 })
 

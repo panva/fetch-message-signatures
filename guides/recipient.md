@@ -41,9 +41,11 @@ const verifier: FetchSig.VerifierFactory = (signature, context) => {
 }
 ```
 
-The factory is synchronous. Resolve keys from a local trust store or pre-populated cache. If key
-discovery requires network I/O, perform and validate that discovery before calling `verify()`. Never
-fetch an arbitrary URL merely because it appeared in an unverified `keyid`.
+The factory may return a Promise, so a key that has to be fetched or refreshed on rotation can be
+awaited there. Resolve it through a local trust store, a cache, or a discovery endpoint fixed by
+configuration. Never fetch an arbitrary URL merely because it appeared in an unverified `keyid`. The
+signature base is rebuilt after the factory settles, so a message that changes while a key is being
+fetched is rejected rather than verified.
 
 `context.message` is the target message. `context.request` is the related request when the target is
 a response. Use this context to prevent a valid key from being accepted outside its authorized

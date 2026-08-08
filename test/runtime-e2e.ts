@@ -87,12 +87,12 @@ function verifierForKey(
   onVerified: () => void,
 ): VerifierFactory {
   const verifier = ed25519Verifier(key)
-  return (signature, context) => {
+  return async (signature, context) => {
     assertion(
       getSignatureParameter(signature, 'keyid') === expectedKeyId,
       `expected signature keyid "${expectedKeyId}"`,
     )
-    const selected = verifier(signature, context)
+    const selected = await verifier(signature, context)
     return {
       ...selected,
       async verify(data, value) {

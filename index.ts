@@ -321,7 +321,7 @@ export interface Signer {
 /** A synchronous factory returning a signer implementation. */
 export type SignerFactory = () => Readonly<Signer>
 
-/** A Promise-based verifier implementation returned by a synchronous factory. */
+/** A Promise-based verifier implementation returned by a {@link VerifierFactory}. */
 export interface Verifier {
   readonly type: 'verifier'
   /** The algorithm selected by configuration or key metadata. */
@@ -330,7 +330,7 @@ export interface Verifier {
 }
 
 /**
- * A synchronous factory that selects trusted verification key material and an algorithm.
+ * A factory that selects trusted verification key material and an algorithm.
  *
  * The factory is the application's key-resolution and trust-policy boundary. It MUST reject unknown
  * or inappropriate key identifiers and algorithms instead of returning a verifier for them.
@@ -338,8 +338,24 @@ export interface Verifier {
  * It receives the parsed signature before any cryptography runs, so selection can depend on
  * `keyid`, `alg`, the covered component list, or the message itself. Use
  * {@link getSignatureParameter} to read a metadata parameter.
+ *
+ * It may return a Promise, so a key that has to be fetched or refreshed on rotation can be awaited
+ * here. A `keyid` is unauthenticated at this point, so resolve it through trusted configuration and
+ * never treat it as a location to fetch. The signature base is rebuilt after the factory settles,
+ * so a message that changes while a key is being fetched is rejected rather than verified.
  */
 export type VerifierFactory = (
+  signature: Readonly<MessageSignature>,
+  context: Readonly<VerificationContext>,
+) => Readonly<Verifier> | Promise<Readonly<Verifier>>
+
+/**
+ * A {@link VerifierFactory} that resolves its verifier without suspending.
+ *
+ * Every factory this package returns is synchronous, and says so, so that composing one keeps
+ * working without an `await`. It remains assignable to {@link VerifierFactory}.
+ */
+export type SynchronousVerifierFactory = (
   signature: Readonly<MessageSignature>,
   context: Readonly<VerificationContext>,
 ) => Readonly<Verifier>
@@ -555,7 +571,7 @@ function createWebCryptoVerifierFactory(
   key: CryptoKey,
   expected: AlgorithmKeyExpectation,
   operation: WebCryptoSignatureAlgorithm,
-): VerifierFactory {
+): SynchronousVerifierFactory {
   assertAlgorithmKey(key, expected)
   return () => ({
     type: 'verifier',
@@ -642,7 +658,7 @@ export function ecdsaP256Sha256Signer(key: CryptoKey): SignerFactory {
  * @param key - Web Cryptography's `CryptoKey` for an ECDSA P-256 public key with `verify` usage.
  * @group Cryptographic Algorithms
  */
-export function ecdsaP256Sha256Verifier(key: CryptoKey): VerifierFactory {
+export function ecdsaP256Sha256Verifier(key: CryptoKey): SynchronousVerifierFactory {
   return createWebCryptoVerifierFactory(
     key,
     {
@@ -732,7 +748,7 @@ export function ecdsaP384Sha384Signer(key: CryptoKey): SignerFactory {
  * @param key - Web Cryptography's `CryptoKey` for an ECDSA P-384 public key with `verify` usage.
  * @group Cryptographic Algorithms
  */
-export function ecdsaP384Sha384Verifier(key: CryptoKey): VerifierFactory {
+export function ecdsaP384Sha384Verifier(key: CryptoKey): SynchronousVerifierFactory {
   return createWebCryptoVerifierFactory(
     key,
     {
@@ -824,7 +840,7 @@ export function ed25519Signer(key: CryptoKey): SignerFactory {
  * @param key - Web Cryptography's `CryptoKey` for an Ed25519 public key with `verify` usage.
  * @group Cryptographic Algorithms
  */
-export function ed25519Verifier(key: CryptoKey): VerifierFactory {
+export function ed25519Verifier(key: CryptoKey): SynchronousVerifierFactory {
   return createWebCryptoVerifierFactory(
     key,
     { identifier: 'ed25519', type: 'public', usage: 'verify', algorithm: 'Ed25519' },
@@ -3511,20 +3527,20 @@ function signerFromFactory(factory: SignerFactory): Readonly<Signer> {
  * Invokes a {@link VerifierFactory} with the parsed signature and message context, and rejects a
  * return value that does not implement {@link Verifier}.
  *
- * The factory is the application's key-selection and trust boundary, so any exception it throws,
- * such as an unknown `keyid`, becomes the `cause` of the reported error.
+ * The factory is the application's key-selection and trust boundary, so any exception it throws or
+ * rejection it returns, such as an unknown `keyid`, becomes the `cause` of the reported error.
  */
-function verifierFromFactory(
+async function verifierFromFactory(
   factory: VerifierFactory,
   signature: Readonly<MessageSignature>,
   context: Readonly<VerificationContext>,
-): Readonly<Verifier> {
+): Promise<Readonly<Verifier>> {
   if (typeof factory !== 'function') {
     fail('"verifier" must be a factory function')
   }
   let verifier: Readonly<Verifier>
   try {
-    verifier = factory(signature, context)
+    verifier = await factory(signature, context)
     if (
       verifier === null ||
       typeof verifier !== 'object' ||
@@ -4300,7 +4316,7 @@ export async function verify(
   assertMessageUnchanged(guard, 'verification')
 
   const context: VerificationContext = { message, request: options.request }
-  const verifier = verifierFromFactory(options.verifier, cloneMessageSignature(signature), {
+  const verifier = await verifierFromFactory(options.verifier, cloneMessageSignature(signature), {
     ...context,
   })
   const algorithm = verifier.alg

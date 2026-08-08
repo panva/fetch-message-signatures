@@ -1,6 +1,6 @@
 # Interface: Verifier
 
-A Promise-based verifier implementation returned by a synchronous factory.
+A Promise-based verifier implementation returned by a [VerifierFactory](../type-aliases/VerifierFactory.md).
 
 ## Contents
 

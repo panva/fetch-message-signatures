@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 
 import {
   appendAcceptSignature,
+  getSignatureParameter,
   appendSignature,
   component,
   createSigningFetch,
@@ -1233,7 +1234,10 @@ describe('signature parsing, metadata, and multiple-signature boundaries', () =>
           type: 'verifier',
           alg: 'hmac-sha256',
           async verify(data, signature) {
-            return webCryptoVerifier()(observed, { message: signed }).verify(data, signature)
+            return (await webCryptoVerifier()(observed, { message: signed })).verify(
+              data,
+              signature,
+            )
           },
         }
       },
@@ -2073,6 +2077,35 @@ describe('verification policy snapshot', () => {
       /Required signature parameter "nonce" is missing/,
     )
     assert.equal(parametersReads, 1)
+  })
+})
+
+describe('asynchronous key selection', () => {
+  it('rejects a message that changed while the key was being fetched', async () => {
+    // A verifier factory that returns a Promise is a suspension point. The signature base is
+    // rebuilt after it settles, so the guard has to sit after the factory rather than before it.
+    // Covers a field a browser also lets script set, so this runs on every runtime.
+    const signed = await sign(
+      new Request('https://example.com/', { headers: { 'x-covered': 'original' } }),
+      {
+        signer: webCryptoSigner(),
+        components: ['@method', 'x-covered'],
+        parameters: { created: RFC_CREATED },
+      },
+    )
+    const headers = new Headers(signed.headers)
+
+    await assert.rejects(
+      verify({ method: signed.method, url: signed.url, headers } as Request, {
+        verifier: async (signature, context) => {
+          await Promise.resolve()
+          headers.set('x-covered', 'changed')
+          return webCryptoVerifier()(signature, context)
+        },
+        policy: verificationPolicy(),
+      }),
+      /headers changed during signature verification/,
+    )
   })
 })
 

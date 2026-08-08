@@ -90,8 +90,8 @@ identifier must still match both the returned provider's `alg` and the verificat
 Neither `alg` nor `keyid` establishes trust. Scope key lookup to the relevant issuer, tenant, or
 protocol context, authorize the key for the message, and bind it to one configured algorithm. Do not
 turn `keyid` into an unrestricted network lookup or try every known key until one verifies. The
-factory is synchronous, so network discovery must happen before verification, usually through a
-bounded cache.
+factory may return a Promise, so a key can be fetched or refreshed there, but the endpoint it
+reaches must come from configuration rather than from the message.
 
 Built-in signer and verifier functions synchronously validate the key type, required usage, Web
 Cryptography algorithm, and named curve. A P-384 ECDSA key therefore cannot be used with the

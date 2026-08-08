@@ -175,7 +175,7 @@ const order = await response.json()
 | [VerificationPolicy](interfaces/VerificationPolicy.md) | Explicit application policy required before a cryptographically valid signature is accepted. |
 | [VerifiedSignature](interfaces/VerifiedSignature.md) | A successfully verified signature. |
 | [VerifiedSignatureContext](interfaces/VerifiedSignatureContext.md) | Authenticated context supplied to additional application policy. |
-| [Verifier](interfaces/Verifier.md) | A Promise-based verifier implementation returned by a synchronous factory. |
+| [Verifier](interfaces/Verifier.md) | A Promise-based verifier implementation returned by a [VerifierFactory](type-aliases/VerifierFactory.md). |
 | [VerifyingFetchOptions](interfaces/VerifyingFetchOptions.md) | Options for a Fetch-compatible function that verifies responses against their requests. |
 | [VerifyOptions](interfaces/VerifyOptions.md) | Recipient options. |
 
@@ -195,4 +195,5 @@ const order = await response.json()
 | [SignatureParameterValue](type-aliases/SignatureParameterValue.md) | A value that can be used as an HTTP signature metadata parameter. |
 | [SignerFactory](type-aliases/SignerFactory.md) | A synchronous factory returning a signer implementation. |
 | [StructuredFieldType](type-aliases/StructuredFieldType.md) | The top-level type of an HTTP Structured Field. |
-| [VerifierFactory](type-aliases/VerifierFactory.md) | A synchronous factory that selects trusted verification key material and an algorithm. |
+| [SynchronousVerifierFactory](type-aliases/SynchronousVerifierFactory.md) | A [VerifierFactory](type-aliases/VerifierFactory.md) that resolves its verifier without suspending. |
+| [VerifierFactory](type-aliases/VerifierFactory.md) | A factory that selects trusted verification key material and an algorithm. |
