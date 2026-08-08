@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.0.4](https://github.com/panva/fetch-message-signatures/compare/v0.0.3...v0.0.4) (2026-08-08)
+
+### Features
+
+* add createSignatureFields ([5d71ea6](https://github.com/panva/fetch-message-signatures/commit/5d71ea65c62ece8bb28c0b3bbc7ad70f19aea86e))
+* add findComponents ([73cba2a](https://github.com/panva/fetch-message-signatures/commit/73cba2a972f0aeda251deb6a27ac59f52a3e8828))
+
 ## [0.0.3](https://github.com/panva/fetch-message-signatures/compare/v0.0.2...v0.0.3) (2026-08-08)
 
 ### Features
