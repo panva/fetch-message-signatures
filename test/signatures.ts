@@ -10,6 +10,7 @@ import {
   createSignatureBase,
   createVerifyingFetch,
   decimal,
+  getSignatureParameter,
   getSignatures,
   parseSignature,
   parseSignatureInput,
@@ -200,6 +201,19 @@ describe('signature field parsing and pairing', () => {
     )
   })
 
+  it('reads a metadata parameter without reproducing the ordered-list shape', () => {
+    const [parsed] = parseSignatureInput(
+      'sig1=("@method");created=1618884473;keyid="client-key";alg="ed25519"',
+    )
+    const signature = { ...parsed!, signature: new Uint8Array() }
+
+    assert.equal(getSignatureParameter(signature, 'keyid'), 'client-key')
+    assert.equal(getSignatureParameter(signature, 'alg'), 'ed25519')
+    assert.equal(getSignatureParameter(signature, 'created'), RFC_CREATED)
+    assert.equal(getSignatureParameter(signature, 'nonce'), undefined)
+    assert.throws(() => getSignatureParameter(null as never, 'keyid'), /must be a MessageSignature/)
+    assert.throws(() => getSignatureParameter(signature, 1 as never), /"name" must be a string/)
+  })
   it('rejects missing or mismatched Signature and Signature-Input fields', () => {
     assert.throws(
       () => getSignatures(signedHeaders('sig1=("@method")', null)),

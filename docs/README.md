@@ -20,7 +20,7 @@ const signer = FetchSig.ed25519Signer(privateKey)
 const verifyWithKey = FetchSig.ed25519Verifier(publicKey)
 
 const verifier: FetchSig.VerifierFactory = (signature, context) => {
-  const keyid = signature.parameters.find(([name]) => name === 'keyid')?.[1]
+  const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
   if (keyid !== 'example-key') throw new Error('Untrusted signing key')
   return verifyWithKey(signature, context)
 }
@@ -105,6 +105,7 @@ const order = await response.json()
 
 | Function | Description |
 | :------ | :------ |
+| [getSignatureParameter](functions/getSignatureParameter.md) | Returns one signature metadata parameter by name, or `undefined` when the signature omits it. |
 | [getSignatures](functions/getSignatures.md) | Parses and pairs every signature carried by a Fetch message, so that an application can choose which label to verify. |
 | [parseSignature](functions/parseSignature.md) | Parses a `Signature` field value into its labeled signature byte sequences. |
 | [parseSignatureInput](functions/parseSignatureInput.md) | Parses a `Signature-Input` field value into its labeled covered component lists and signature metadata parameters. |

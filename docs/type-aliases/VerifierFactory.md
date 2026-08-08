@@ -7,6 +7,10 @@ A synchronous factory that selects trusted verification key material and an algo
 The factory is the application's key-resolution and trust-policy boundary. It MUST reject unknown
 or inappropriate key identifiers and algorithms instead of returning a verifier for them.
 
+It receives the parsed signature before any cryptography runs, so selection can depend on
+`keyid`, `alg`, the covered component list, or the message itself. Use
+[getSignatureParameter](../functions/getSignatureParameter.md) to read a metadata parameter.
+
 ## Parameters
 
 | Parameter | Type |

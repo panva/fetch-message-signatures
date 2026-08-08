@@ -20,7 +20,7 @@
  * const verifyWithKey = FetchSig.ed25519Verifier(publicKey)
  *
  * const verifier: FetchSig.VerifierFactory = (signature, context) => {
- *   const keyid = signature.parameters.find(([name]) => name === 'keyid')?.[1]
+ *   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
  *   if (keyid !== 'example-key') throw new Error('Untrusted signing key')
  *   return verifyWithKey(signature, context)
  * }
@@ -334,6 +334,10 @@ export interface Verifier {
  *
  * The factory is the application's key-resolution and trust-policy boundary. It MUST reject unknown
  * or inappropriate key identifiers and algorithms instead of returning a verifier for them.
+ *
+ * It receives the parsed signature before any cryptography runs, so selection can depend on
+ * `keyid`, `alg`, the covered component list, or the message itself. Use
+ * {@link getSignatureParameter} to read a metadata parameter.
  */
 export type VerifierFactory = (
   signature: Readonly<MessageSignature>,
@@ -803,7 +807,7 @@ export function ed25519Signer(key: CryptoKey): SignerFactory {
  * declare const publicKeys: ReadonlyMap<string, CryptoKey>
  *
  * const verifier: FetchSig.VerifierFactory = (signature, context) => {
- *   const keyid = signature.parameters.find(([name]) => name === 'keyid')?.[1]
+ *   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
  *   if (typeof keyid !== 'string') {
  *     throw new Error('A key identifier is required')
  *   }
@@ -3325,6 +3329,53 @@ function parseSignatureFieldMembers(headers: Headers): {
 }
 
 /**
+ * Returns one signature metadata parameter by name, or `undefined` when the signature omits it.
+ *
+ * The parameters are an ordered list rather than an object, because RFC 9421 covers their order in
+ * the signature base. This looks one up without having to reproduce that shape at the call site.
+ *
+ * A parameter read here is unauthenticated when it comes from a {@link VerifierFactory}, which runs
+ * before the signature has been checked. Treat `keyid` as a lookup key into trusted configuration,
+ * and `alg` as a claim that {@link VerificationPolicy.algorithms} still has to allow.
+ *
+ * @example
+ *
+ * Select a trusted key by the `keyid` a signature claims.
+ *
+ * ```ts
+ * declare const publicKeys: ReadonlyMap<string, CryptoKey>
+ *
+ * const verifier: FetchSig.VerifierFactory = (signature, context) => {
+ *   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
+ *   if (typeof keyid !== 'string') {
+ *     throw new Error('A key identifier is required')
+ *   }
+ *
+ *   const publicKey = publicKeys.get(keyid)
+ *   if (publicKey === undefined) {
+ *     throw new Error('Unknown signing key')
+ *   }
+ *
+ *   return FetchSig.ed25519Verifier(publicKey)(signature, context)
+ * }
+ * ```
+ *
+ * @group Recipient
+ */
+export function getSignatureParameter(
+  signature: Readonly<MessageSignature>,
+  name: string,
+): SignatureParameterValue | undefined {
+  if (signature === null || typeof signature !== 'object' || !Array.isArray(signature.parameters)) {
+    fail('"signature" must be a MessageSignature object')
+  }
+  if (typeof name !== 'string') {
+    fail('"name" must be a string')
+  }
+  return findSignatureParameterValue(signature.parameters, name)
+}
+
+/**
  * Parses and pairs every signature carried by a Fetch message, so that an application can choose
  * which label to verify.
  *
@@ -4178,7 +4229,7 @@ function enforceVerificationAlgorithm(
  *     clockSkew: 5,
  *     async validate(signature, context) {
  *       // Runs only after the signature is cryptographically valid, so the nonce is authentic.
- *       const nonce = signature.parameters.find(([name]) => name === 'nonce')?.[1]
+ *       const nonce = FetchSig.getSignatureParameter(signature, 'nonce')
  *       if (typeof nonce !== 'string') {
  *         throw new Error('A nonce is required')
  *       }

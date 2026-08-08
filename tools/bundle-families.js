@@ -45,6 +45,7 @@ const ENTRIES = [
   { name: 'getSignatureRequests', families: ['accept'] },
   { name: 'signRequested', families: ['sender', 'accept'] },
   { name: 'getSignatures', families: [] },
+  { name: 'getSignatureParameter', families: [] },
   { name: 'createSignatureBase', families: [] },
   { name: 'component', families: [] },
   { name: 'ed25519Signer', families: [] },

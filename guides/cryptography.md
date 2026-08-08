@@ -67,7 +67,7 @@ declare const publicKeys: ReadonlyMap<string, CryptoKey>
 const signer = FetchSig.ed25519Signer(privateKey)
 
 const verifier: FetchSig.VerifierFactory = (signature, context) => {
-  const keyid = signature.parameters.find(([name]) => name === 'keyid')?.[1]
+  const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
   if (typeof keyid !== 'string') {
     throw new Error('Missing keyid')
   }

@@ -27,7 +27,7 @@ This is the shape to reach for whenever more than one key can sign.
 declare const publicKeys: ReadonlyMap<string, CryptoKey>
 
 const verifier: FetchSig.VerifierFactory = (signature, context) => {
-  const keyid = signature.parameters.find(([name]) => name === 'keyid')?.[1]
+  const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
   if (typeof keyid !== 'string') {
     throw new Error('A key identifier is required')
   }
