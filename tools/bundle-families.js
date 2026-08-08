@@ -47,6 +47,7 @@ const ENTRIES = [
   { name: 'getSignatures', families: [] },
   { name: 'getSignatureParameter', families: [] },
   { name: 'createSignatureBase', families: [] },
+  { name: 'createSignatureFields', families: [] },
   { name: 'component', families: [] },
   { name: 'includesComponent', families: [] },
   { name: 'findComponents', families: [] },

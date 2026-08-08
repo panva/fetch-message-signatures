@@ -9,6 +9,7 @@ import {
   createSignature,
   createSignatureBase,
   createVerifyingFetch,
+  createSignatureFields,
   decimal,
   findComponents,
   getSignatureParameter,
@@ -22,6 +23,7 @@ import {
 } from '../index.ts'
 import type { VerificationPolicy, VerifierFactory } from '../index.ts'
 import {
+  bytesToBase64,
   REQUEST_CARRIES_FORBIDDEN_FIELDS,
   RFC_CREATED,
   rfcRequest,
@@ -279,6 +281,117 @@ describe('verifier factory contract', () => {
     assert.equal(getSignatureParameter(signature, 'nonce'), undefined)
     assert.throws(() => getSignatureParameter(null as never, 'keyid'), /must be a MessageSignature/)
     assert.throws(() => getSignatureParameter(signature, 1 as never), /"name" must be a string/)
+  })
+})
+
+describe('synchronous signature field serialization', () => {
+  const components = ['@method', '@authority', '@path', 'x-covered']
+  const parameters = [
+    ['created', RFC_CREATED],
+    ['keyid', 'client-key'],
+    ['alg', 'test'],
+  ] as const
+  const bytes = new Uint8Array(64).map((_, index) => (index * 7) % 251)
+
+  function message(): Request {
+    return new Request('https://api.example/orders?page=1', {
+      method: 'POST',
+      headers: { 'x-covered': 'value' },
+    })
+  }
+
+  it('produces exactly what createSignature produces for the same inputs', async () => {
+    const oneStep = await createSignature(message(), {
+      signer: () => ({ type: 'signer', alg: 'test', sign: () => bytes }),
+      components,
+      parameters,
+      label: 'sig9',
+    })
+    const composed = createSignatureFields({
+      signature: bytes,
+      components,
+      parameters,
+      label: 'sig9',
+    })
+
+    assert.equal(composed.signatureInput, oneStep.signatureInput)
+    assert.equal(composed.signatureField, oneStep.signatureField)
+    assert.deepEqual(composed.components, oneStep.components)
+    assert.deepEqual(composed.parameters, oneStep.parameters)
+    assert.deepEqual(composed.signature, oneStep.signature)
+    assert.equal(composed.label, 'sig9')
+  })
+
+  it('round trips a synchronously signed message through verify', async () => {
+    // The whole point: no await between building the base and holding the fields.
+    const digest = (data: Uint8Array): Uint8Array<ArrayBuffer> => {
+      const out = new Uint8Array(32)
+      for (const [index, byte] of data.entries()) {
+        out[index % 32] = (out[index % 32]! + byte * 31 + index) % 251
+      }
+      return out
+    }
+    const request = message()
+    const base = createSignatureBase(request, { components, parameters })
+    const fields = createSignatureFields({
+      signature: digest(new TextEncoder().encode(base)),
+      components,
+      parameters,
+    })
+    const signed = appendSignature(request, fields)
+
+    const verified = await verify(signed, {
+      verifier: () => ({
+        type: 'verifier',
+        alg: 'test',
+        verify: (data, signature) => bytesToBase64(digest(data)) === bytesToBase64(signature),
+      }),
+      policy: verificationPolicy({ algorithms: ['test'], requiredComponents: [...components] }),
+    })
+
+    assert.equal(verified.label, 'sig1')
+    assert.equal(verified.algorithm, 'test')
+  })
+
+  it('copies the signature so a later mutation cannot change the fields', () => {
+    const owned = new Uint8Array([1, 2, 3])
+    const fields = createSignatureFields({ signature: owned, components, parameters })
+    const before = fields.signatureField
+
+    owned.fill(0)
+    assert.deepEqual(fields.signature, new Uint8Array([1, 2, 3]))
+    assert.equal(fields.signatureField, before)
+  })
+
+  it('adds no default created, unlike createSignature', async () => {
+    const composed = createSignatureFields({ signature: bytes, components: ['@method'] })
+    const oneStep = await createSignature(message(), {
+      signer: () => ({ type: 'signer', alg: 'test', sign: () => bytes }),
+      components: ['@method'],
+    })
+
+    assert.equal(composed.signatureInput, 'sig1=("@method")')
+    assert.match(oneStep.signatureInput, /^sig1=\("@method"\);created=\d+$/)
+  })
+
+  it('validates its options', () => {
+    assert.throws(() => createSignatureFields(null as never), /"options" must be an object/)
+    assert.throws(
+      () => createSignatureFields({ signature: 'nope' as never, components }),
+      /"signature" must be a Uint8Array/,
+    )
+    assert.throws(
+      () => createSignatureFields({ signature: bytes, components, label: 'Bad Label' }),
+      /Signature label/,
+    )
+    assert.throws(
+      () => createSignatureFields({ signature: bytes, components: ['@method', '@method'] }),
+      /Duplicate covered component/,
+    )
+    assert.throws(
+      () => createSignatureFields({ signature: bytes, components: ['@bogus'] }),
+      /@bogus/,
+    )
   })
 })
 

@@ -273,3 +273,38 @@ console.log(base)
 Use it for protocol diagnostics and interoperability fixtures. Prefer `sign()` or
 `createSignature()` in application code so the signature bytes and serialized metadata are produced
 together.
+
+## Signing without awaiting
+
+`sign()` and `createSignature()` return Promises, because Web Cryptography does. A caller that
+cannot await, such as a blocking `chrome.webRequest.onBeforeSendHeaders` listener in a browser
+extension, can build the base and serialize the result around its own synchronous signing library:
+
+```ts
+declare function signSynchronously(data: Uint8Array): Uint8Array
+declare const request: Request
+
+const components = ['@method', '@authority', '@path']
+const parameters = [
+  ['created', 1_735_689_600],
+  ['keyid', 'client-key'],
+  ['alg', 'ed25519'],
+] as const
+
+const base = FetchSig.createSignatureBase(request, { components, parameters })
+const fields = FetchSig.createSignatureFields({
+  signature: signSynchronously(new TextEncoder().encode(base)),
+  components,
+  parameters,
+})
+
+const signed = FetchSig.appendSignature(request, fields)
+```
+
+Pass the same `components` and `parameters` to both calls. They are what the signature commits to,
+and the fields describe the base that was actually signed only if the two agree. Neither call adds a
+default `created`, which `createSignature()` does, so supply one.
+
+The result is identical to what `createSignature()` produces for the same inputs, which the test
+suite asserts field by field. The built-in providers cannot be used here, since Web Cryptography has
+no synchronous interface.

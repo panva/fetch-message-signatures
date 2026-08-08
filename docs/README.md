@@ -99,6 +99,7 @@ const order = await response.json()
 | :------ | :------ |
 | [appendSignature](functions/appendSignature.md) | Adds one signature to `Headers` and returns a new `Headers` object. |
 | [createSignature](functions/createSignature.md) | Creates one HTTP message signature without modifying or cloning the Fetch message. |
+| [createSignatureFields](functions/createSignatureFields.md) | Serializes a signature produced outside this package into its `Signature-Input` and `Signature` fields. |
 | [sign](functions/sign.md) | Creates and appends one HTTP message signature. |
 
 ## Recipient
@@ -169,6 +170,7 @@ const order = await response.json()
 | [SignatureBaseOptions](interfaces/SignatureBaseOptions.md) | Options for direct signature-base creation. |
 | [SignatureContext](interfaces/SignatureContext.md) | Options shared by signature-base creation, signing, and verification. |
 | [SignatureFields](interfaces/SignatureFields.md) | The result of creating one signature, ready to be added to the corresponding HTTP fields. |
+| [SignatureFieldsOptions](interfaces/SignatureFieldsOptions.md) | Options for serializing a signature that was produced elsewhere into its two HTTP fields. |
 | [SignatureRequest](interfaces/SignatureRequest.md) | A requested HTTP message signature parsed from `Accept-Signature`. |
 | [SignatureRequestInput](interfaces/SignatureRequestInput.md) | Input used to create an `Accept-Signature` member. |
 | [SignedFetchOptions](interfaces/SignedFetchOptions.md) | Options for a Fetch-compatible function that signs requests and optionally verifies responses. |

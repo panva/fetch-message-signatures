@@ -427,6 +427,15 @@ export interface SignatureBaseOptions extends SignatureContext {
   readonly parameters?: SignatureParameters
 }
 
+/** Options for serializing a signature that was produced elsewhere into its two HTTP fields. */
+export interface SignatureFieldsOptions {
+  /** The signature over the corresponding signature base. */
+  readonly signature: Uint8Array
+  readonly components: ReadonlyArray<ComponentIdentifier>
+  readonly parameters?: SignatureParameters
+  readonly label?: string
+}
+
 type SfBareItem =
   | { readonly kind: 'integer'; readonly value: number }
   | { readonly kind: 'decimal'; readonly value: number }
@@ -3519,6 +3528,74 @@ export function createSignatureBase(
   const components = normalizeComponents(options.components)
   const parameters = normalizeSignatureParameters(options.parameters, undefined)
   return buildSignatureBase(message, components, parameters, options)
+}
+
+/**
+ * Serializes a signature produced outside this package into its `Signature-Input` and `Signature`
+ * fields.
+ *
+ * This is the second half of {@link createSignatureBase}, for a caller who signs the base bytes
+ * themselves. Together the two cover what {@link createSignature} does in one step, without its
+ * `Promise`, so a synchronous signing library can be used where awaiting is not possible. Pass the
+ * same `components` and `parameters` to both calls: they are what the signature commits to, and the
+ * fields describe the base that was actually signed only if the two agree.
+ *
+ * Neither function adds a default `created` timestamp, which {@link createSignature} does, so
+ * supplying one is the caller's job.
+ *
+ * The signature bytes are copied, so a later mutation of the caller's array cannot change the
+ * returned fields.
+ *
+ * @example
+ *
+ * Signing with a synchronous library, in a context that cannot await.
+ *
+ * ```ts
+ * declare function signSynchronously(data: Uint8Array): Uint8Array
+ * declare const request: Request
+ *
+ * const components = ['@method', '@authority', '@path']
+ * const parameters = [
+ *   ['created', 1_735_689_600],
+ *   ['keyid', 'client-key'],
+ *   ['alg', 'ed25519'],
+ * ] as const
+ *
+ * const base = FetchSig.createSignatureBase(request, { components, parameters })
+ * const fields = FetchSig.createSignatureFields({
+ *   signature: signSynchronously(new TextEncoder().encode(base)),
+ *   components,
+ *   parameters,
+ * })
+ *
+ * const signed = FetchSig.appendSignature(request, fields)
+ * ```
+ *
+ * @returns The signature together with the two field values it serializes to.
+ * @group Sender
+ */
+export function createSignatureFields(options: SignatureFieldsOptions): SignatureFields {
+  if (options === null || typeof options !== 'object') {
+    fail('"options" must be an object')
+  }
+  const label = options.label ?? 'sig1'
+  assertSfKey(label, 'Signature label')
+  if (!isUint8Array(options.signature)) {
+    fail('"signature" must be a Uint8Array')
+  }
+
+  const components = normalizeComponents(options.components)
+  assertUniqueComponents(components)
+  const parameters = normalizeSignatureParameters(options.parameters, undefined)
+
+  const signature = cloneBytes(options.signature)
+  return {
+    label,
+    components,
+    parameters: signatureParametersFromSf(parameters),
+    signature,
+    ...serializeSignatureFields(label, components, parameters, signature),
+  }
 }
 
 interface ParsedSignatureInput {
