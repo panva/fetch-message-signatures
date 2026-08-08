@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.0.7](https://github.com/panva/fetch-message-signatures/compare/v0.0.6...v0.0.7) (2026-08-08)
+
+### Refactor
+
+* detect target URI credentials with the URL parser ([066681c](https://github.com/panva/fetch-message-signatures/commit/066681c2e063b032be23e6484437328250f995de))
+
+### Performance
+
+* build a signature base with less work ([8e528ac](https://github.com/panva/fetch-message-signatures/commit/8e528ac40a9b212bae4fec3ba55c84dac2cae900))
+
 ## [0.0.6](https://github.com/panva/fetch-message-signatures/compare/v0.0.5...v0.0.6) (2026-08-08)
 
 ### Fixes
