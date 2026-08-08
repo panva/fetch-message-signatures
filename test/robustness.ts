@@ -27,8 +27,10 @@ import type {
   MessageSignature,
   VerifyOptions,
   SignatureParameterInput,
+  SignerFactory,
   SignOptions,
   StructuredFieldType,
+  SynchronousVerifierFactory,
   VerificationPolicy,
   VerifierFactory,
 } from '../index.ts'
@@ -448,6 +450,101 @@ describe('derived-component and field boundaries', () => {
       assert.throws(() => createSignatureBase(requestFixture(), { components }), pattern)
     })
   }
+})
+
+/**
+ * A deterministic synchronous stand-in for a signing primitive.
+ *
+ * Not cryptography. Web Cryptography has no synchronous interface, so exercising a synchronous
+ * provider needs a synchronous primitive, and what these tests cover is the plumbing that accepts
+ * one rather than the transform itself.
+ */
+function syncDigest(data: Uint8Array): Uint8Array<ArrayBuffer> {
+  const digest = new Uint8Array(32)
+  for (const [index, byte] of data.entries()) {
+    const slot = index % digest.length
+    digest[slot] = (digest[slot]! + byte * 31 + index) % 251
+  }
+  return digest
+}
+
+const syncSigner: SignerFactory = () => ({
+  type: 'signer',
+  alg: 'sync-stub',
+  sign(data) {
+    return syncDigest(data)
+  },
+})
+
+const syncVerifier: SynchronousVerifierFactory = () => ({
+  type: 'verifier',
+  alg: 'sync-stub',
+  verify(data, signature) {
+    return bytesToBase64(syncDigest(data)) === bytesToBase64(signature)
+  },
+})
+
+const syncSignOptions: SignOptions = {
+  signer: syncSigner,
+  components: ['@method', '@authority', 'x-covered'],
+  parameters: { created: RFC_CREATED, keyid: 'test-key', alg: 'sync-stub' },
+  label: 'tested',
+}
+
+const syncPolicy = (overrides: Partial<VerificationPolicy> = {}): VerificationPolicy =>
+  verificationPolicy({ algorithms: ['sync-stub'], ...overrides })
+
+describe('synchronous providers', () => {
+  it('returns the signature and the result without a Promise', () => {
+    const data = encoder.encode('HTTP Message Signatures')
+    const signature = syncDigest(data)
+    assert.deepEqual(syncSigner().sign(data), signature)
+
+    const result = syncVerifier(
+      { label: 'tested', components: [], parameters: [], signature },
+      { message: requestFixture() },
+    ).verify(data, signature)
+    // A boolean, not a Promise of one, so the provider never suspended.
+    assert.equal(result, true)
+  })
+
+  it('round trips a signature through a synchronous signer and verifier', async () => {
+    const signed = await sign(requestFixture(), syncSignOptions)
+    const verified = await verify(signed, { verifier: syncVerifier, policy: syncPolicy() })
+
+    assert.equal(verified.label, 'tested')
+    assert.equal(verified.algorithm, 'sync-stub')
+  })
+
+  it('still fails verification when a covered component changed', async () => {
+    const signed = await sign(requestFixture(), syncSignOptions)
+    const tampered = new Request(signed, { headers: new Headers(signed.headers) })
+    tampered.headers.set('x-covered', 'tampered')
+
+    await assert.rejects(
+      verify(tampered, { verifier: syncVerifier, policy: syncPolicy() }),
+      /HTTP message signature verification failed/,
+    )
+  })
+
+  it('applies the same output checks to a synchronous provider', async () => {
+    await assert.rejects(
+      createSignature(requestFixture(), {
+        ...syncSignOptions,
+        signer: () => ({ type: 'signer', alg: 'sync-stub', sign: () => 'not bytes' as never }),
+      }),
+      /Signer output must be a Uint8Array/,
+    )
+
+    const signed = await sign(requestFixture(), syncSignOptions)
+    await assert.rejects(
+      verify(signed, {
+        verifier: () => ({ type: 'verifier', alg: 'sync-stub', verify: () => 1 as never }),
+        policy: syncPolicy(),
+      }),
+      /Verifier output must be a boolean/,
+    )
+  })
 })
 
 describe('provider contracts and mutation resistance', () => {

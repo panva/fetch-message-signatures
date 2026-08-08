@@ -171,7 +171,7 @@ const order = await response.json()
 | [SignatureRequest](interfaces/SignatureRequest.md) | A requested HTTP message signature parsed from `Accept-Signature`. |
 | [SignatureRequestInput](interfaces/SignatureRequestInput.md) | Input used to create an `Accept-Signature` member. |
 | [SignedFetchOptions](interfaces/SignedFetchOptions.md) | Options for a Fetch-compatible function that signs requests and optionally verifies responses. |
-| [Signer](interfaces/Signer.md) | A Promise-based signer implementation returned by a synchronous factory. |
+| [Signer](interfaces/Signer.md) | A signer implementation returned by a [SignerFactory](type-aliases/SignerFactory.md). |
 | [SigningFetchOptions](interfaces/SigningFetchOptions.md) | Options for a Fetch-compatible function that signs requests. |
 | [SignOptions](interfaces/SignOptions.md) | Sender options. |
 | [StructuredFieldDate](interfaces/StructuredFieldDate.md) | A Structured Field Date represented as integer UNIX seconds. |
@@ -182,7 +182,7 @@ const order = await response.json()
 | [VerificationPolicy](interfaces/VerificationPolicy.md) | Explicit application policy required before a cryptographically valid signature is accepted. |
 | [VerifiedSignature](interfaces/VerifiedSignature.md) | A successfully verified signature. |
 | [VerifiedSignatureContext](interfaces/VerifiedSignatureContext.md) | Authenticated context supplied to additional application policy. |
-| [Verifier](interfaces/Verifier.md) | A Promise-based verifier implementation returned by a [VerifierFactory](type-aliases/VerifierFactory.md). |
+| [Verifier](interfaces/Verifier.md) | A verifier implementation returned by a [VerifierFactory](type-aliases/VerifierFactory.md). |
 | [VerifyingFetchOptions](interfaces/VerifyingFetchOptions.md) | Options for a Fetch-compatible function that verifies responses against their requests. |
 | [VerifyOptions](interfaces/VerifyOptions.md) | Recipient options. |
 
