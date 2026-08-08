@@ -2,8 +2,11 @@
 
 > **createSignedFetch**(`options`): (`input`, `init?`) => `Promise`<`Response`>
 
-Creates a Fetch-compatible function that signs every outgoing request and, when configured,
-verifies every returned response against that exact request.
+Drop-in `fetch` that signs outgoing requests and verifies responses, in both directions.
+
+Use this when both peers sign. Response verification is optional, so leaving `verify` out gives
+the same behavior as [createSigningFetch](createSigningFetch.md) from one wrapper. To do only one direction and let
+a bundler drop the other, use [createSigningFetch](createSigningFetch.md) or [createVerifyingFetch](createVerifyingFetch.md).
 
 Automatic redirects are changed to manual redirects because Fetch cannot re-sign each redirected
 request and could otherwise forward stale signature fields to a different origin.

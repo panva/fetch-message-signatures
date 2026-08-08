@@ -47,6 +47,45 @@
  * // sig1 ed25519
  * console.log(verified.label, verified.algorithm)
  * ```
+ *
+ * @example
+ *
+ * Send signed requests through `fetch`. Three wrappers cover the three directions:
+ *
+ * | wrapper                  | outgoing request | incoming response |
+ * | ------------------------ | ---------------- | ----------------- |
+ * | `createSigningFetch()`   | signed           | not verified      |
+ * | `createVerifyingFetch()` | not signed       | verified          |
+ * | `createSignedFetch()`    | signed           | verified          |
+ *
+ * ```ts
+ * import * as FetchSig from 'fetch-message-signatures'
+ *
+ * declare const clientPrivateKey: CryptoKey
+ * declare const serverPublicKey: CryptoKey
+ *
+ * const signedFetch = FetchSig.createSignedFetch({
+ *   sign: {
+ *     signer: FetchSig.ed25519Signer(clientPrivateKey),
+ *     components: ['@method', '@authority', '@path'],
+ *     parameters: { alg: 'ed25519', keyid: 'client-key' },
+ *   },
+ *   verify: {
+ *     verifier: FetchSig.ed25519Verifier(serverPublicKey),
+ *     policy: {
+ *       requiredComponents: ['@status', FetchSig.component('@path', { req: true })],
+ *       requiredParameters: ['created', 'keyid'],
+ *       algorithms: ['ed25519'],
+ *       maxAge: 60,
+ *     },
+ *   },
+ * })
+ *
+ * // Used exactly like fetch. The request is signed on the way out, and the response is
+ * // verified against that exact request before this resolves.
+ * const response = await signedFetch('https://api.example/orders/123')
+ * const order = await response.json()
+ * ```
  */
 
 const encoder = /* @__PURE__ */ new TextEncoder()
@@ -5211,7 +5250,11 @@ function cancelUndeliveredBody(message: Request | Response): void {
 }
 
 /**
- * Creates a Fetch-compatible function that signs every outgoing request.
+ * Drop-in `fetch` that signs outgoing requests only. Responses are returned unverified.
+ *
+ * Use this when the peer verifies what you send but does not sign what it returns. To verify
+ * responses as well, use {@link createSignedFetch}. To verify without signing, use
+ * {@link createVerifyingFetch}.
  *
  * Automatic redirects are changed to manual redirects because Fetch cannot re-sign each redirected
  * request and could otherwise forward stale signature fields to a different origin.
@@ -5263,7 +5306,7 @@ function cancelUndeliveredBody(message: Request | Response): void {
  * })
  * ```
  *
- * @group Fetch Integration
+ * @group Fetch Wrappers
  */
 export function createSigningFetch(options: SigningFetchOptions): typeof globalThis.fetch {
   if (options === null || typeof options !== 'object') {
@@ -5297,7 +5340,11 @@ export function createSigningFetch(options: SigningFetchOptions): typeof globalT
 }
 
 /**
- * Creates a Fetch-compatible function that verifies every response against its exact request.
+ * Drop-in `fetch` that verifies responses only. Requests are sent unsigned.
+ *
+ * Use this when the peer signs what it returns but does not require a signature from you. To sign
+ * outgoing requests as well, use {@link createSignedFetch}. To sign without verifying, use
+ * {@link createSigningFetch}.
  *
  * Automatic redirects are changed to manual redirects because Fetch does not expose the request
  * that produced a response after following a redirect.
@@ -5334,7 +5381,7 @@ export function createSigningFetch(options: SigningFetchOptions): typeof globalT
  * const orders = await response.json()
  * ```
  *
- * @group Fetch Integration
+ * @group Fetch Wrappers
  */
 export function createVerifyingFetch(options: VerifyingFetchOptions): typeof globalThis.fetch {
   if (options === null || typeof options !== 'object') {
@@ -5365,8 +5412,11 @@ export function createVerifyingFetch(options: VerifyingFetchOptions): typeof glo
 }
 
 /**
- * Creates a Fetch-compatible function that signs every outgoing request and, when configured,
- * verifies every returned response against that exact request.
+ * Drop-in `fetch` that signs outgoing requests and verifies responses, in both directions.
+ *
+ * Use this when both peers sign. Response verification is optional, so leaving `verify` out gives
+ * the same behavior as {@link createSigningFetch} from one wrapper. To do only one direction and let
+ * a bundler drop the other, use {@link createSigningFetch} or {@link createVerifyingFetch}.
  *
  * Automatic redirects are changed to manual redirects because Fetch cannot re-sign each redirected
  * request and could otherwise forward stale signature fields to a different origin.
@@ -5406,7 +5456,7 @@ export function createVerifyingFetch(options: VerifyingFetchOptions): typeof glo
  * const response = await signedFetch('https://api.example/orders')
  * ```
  *
- * @group Fetch Integration
+ * @group Fetch Wrappers
  */
 export function createSignedFetch(options: SignedFetchOptions): typeof globalThis.fetch {
   if (options === null || typeof options !== 'object') {

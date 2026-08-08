@@ -8,7 +8,7 @@ Implements the sender, recipient, and `Accept-Signature` operations from [RFC
 Cryptography implementations of the ECDSA and Ed25519 signature algorithms, and supports custom
 cryptographic providers.
 
-## Example
+## Examples
 
 Sign and verify a request with Ed25519 through Web Cryptography.
 
@@ -48,97 +48,150 @@ const verified = await FetchSig.verify(request, {
 console.log(verified.label, verified.algorithm)
 ```
 
+Send signed requests through `fetch`. Three wrappers cover the three directions:
+
+| wrapper                  | outgoing request | incoming response |
+| ------------------------ | ---------------- | ----------------- |
+| `createSigningFetch()`   | signed           | not verified      |
+| `createVerifyingFetch()` | not signed       | verified          |
+| `createSignedFetch()`    | signed           | verified          |
+
+```ts
+import * as FetchSig from 'fetch-message-signatures'
+
+declare const clientPrivateKey: CryptoKey
+declare const serverPublicKey: CryptoKey
+
+const signedFetch = FetchSig.createSignedFetch({
+  sign: {
+    signer: FetchSig.ed25519Signer(clientPrivateKey),
+    components: ['@method', '@authority', '@path'],
+    parameters: { alg: 'ed25519', keyid: 'client-key' },
+  },
+  verify: {
+    verifier: FetchSig.ed25519Verifier(serverPublicKey),
+    policy: {
+      requiredComponents: ['@status', FetchSig.component('@path', { req: true })],
+      requiredParameters: ['created', 'keyid'],
+      algorithms: ['ed25519'],
+      maxAge: 60,
+    },
+  },
+})
+
+// Used exactly like fetch. The request is signed on the way out, and the response is
+// verified against that exact request before this resolves.
+const response = await signedFetch('https://api.example/orders/123')
+const order = await response.json()
+```
+
+## Fetch Wrappers
+
+| Function | Description |
+| :------ | :------ |
+| [createSignedFetch](functions/createSignedFetch.md) | Drop-in `fetch` that signs outgoing requests and verifies responses, in both directions. |
+| [createSigningFetch](functions/createSigningFetch.md) | Drop-in `fetch` that signs outgoing requests only. Responses are returned unverified. |
+| [createVerifyingFetch](functions/createVerifyingFetch.md) | Drop-in `fetch` that verifies responses only. Requests are sent unsigned. |
+
 ## Sender
 
-- [appendSignature](functions/appendSignature.md)
-- [createSignature](functions/createSignature.md)
-- [sign](functions/sign.md)
+| Function | Description |
+| :------ | :------ |
+| [appendSignature](functions/appendSignature.md) | Adds one signature to `Headers` and returns a new `Headers` object. |
+| [createSignature](functions/createSignature.md) | Creates one HTTP message signature without modifying or cloning the Fetch message. |
+| [sign](functions/sign.md) | Creates and appends one HTTP message signature. |
 
 ## Recipient
 
-- [getSignatures](functions/getSignatures.md)
-- [parseSignature](functions/parseSignature.md)
-- [parseSignatureInput](functions/parseSignatureInput.md)
-- [verify](functions/verify.md)
-
-## Cryptographic Algorithms
-
-- [ecdsaP256Sha256Signer](functions/ecdsaP256Sha256Signer.md)
-- [ecdsaP256Sha256Verifier](functions/ecdsaP256Sha256Verifier.md)
-- [ecdsaP384Sha384Signer](functions/ecdsaP384Sha384Signer.md)
-- [ecdsaP384Sha384Verifier](functions/ecdsaP384Sha384Verifier.md)
-- [ed25519Signer](functions/ed25519Signer.md)
-- [ed25519Verifier](functions/ed25519Verifier.md)
-- [generateEcdsaP256Sha256KeyPair](functions/generateEcdsaP256Sha256KeyPair.md)
-- [generateEcdsaP384Sha384KeyPair](functions/generateEcdsaP384Sha384KeyPair.md)
-- [generateEd25519KeyPair](functions/generateEd25519KeyPair.md)
+| Function | Description |
+| :------ | :------ |
+| [getSignatures](functions/getSignatures.md) | Parses and pairs every signature carried by a Fetch message, so that an application can choose which label to verify. |
+| [parseSignature](functions/parseSignature.md) | Parses a `Signature` field value into its labeled signature byte sequences. |
+| [parseSignatureInput](functions/parseSignatureInput.md) | Parses a `Signature-Input` field value into its labeled covered component lists and signature metadata parameters. |
+| [verify](functions/verify.md) | Verifies and applies explicit application policy to one HTTP message signature. |
 
 ## Signature Negotiation
 
-- [appendAcceptSignature](functions/appendAcceptSignature.md)
-- [createAcceptSignature](functions/createAcceptSignature.md)
-- [createRequestedSignature](functions/createRequestedSignature.md)
-- [getSignatureRequests](functions/getSignatureRequests.md)
-- [parseAcceptSignature](functions/parseAcceptSignature.md)
-- [signRequested](functions/signRequested.md)
-
-## Fetch Integration
-
-- [createSignedFetch](functions/createSignedFetch.md)
-- [createSigningFetch](functions/createSigningFetch.md)
-- [createVerifyingFetch](functions/createVerifyingFetch.md)
+| Function | Description |
+| :------ | :------ |
+| [appendAcceptSignature](functions/appendAcceptSignature.md) | Adds `Accept-Signature` requests to a `Request` or `Response` and returns a new message. |
+| [createAcceptSignature](functions/createAcceptSignature.md) | Serializes one or more signature requests as an `Accept-Signature` Structured Field Dictionary. |
+| [createRequestedSignature](functions/createRequestedSignature.md) | Fulfills one parsed `Accept-Signature` request without modifying the target Fetch message. |
+| [getSignatureRequests](functions/getSignatureRequests.md) | Parses every signature request carried by a Fetch message and checks that each requested component applies to the message that would be signed. |
+| [parseAcceptSignature](functions/parseAcceptSignature.md) | Parses an `Accept-Signature` field value into its labeled signature requests. |
+| [signRequested](functions/signRequested.md) | Fulfills and appends one parsed `Accept-Signature` request. |
 
 ## Components and Structured Fields
 
-- [component](functions/component.md)
-- [createSignatureBase](functions/createSignatureBase.md)
-- [date](functions/date.md)
-- [decimal](functions/decimal.md)
-- [displayString](functions/displayString.md)
-- [token](functions/token.md)
+| Function | Description |
+| :------ | :------ |
+| [component](functions/component.md) | Creates a component identifier while preserving the supplied parameter order. |
+| [createSignatureBase](functions/createSignatureBase.md) | Creates the RFC 9421 signature base for a Fetch `Request` or `Response`. |
+| [date](functions/date.md) | Creates a validated Structured Field Date. |
+| [decimal](functions/decimal.md) | Creates a validated Structured Field Decimal. |
+| [displayString](functions/displayString.md) | Creates a validated Structured Field Display String. |
+| [token](functions/token.md) | Creates a validated Structured Field Token, for use as an extension signature metadata parameter value. |
+
+## Cryptographic Algorithms
+
+| Function | Description |
+| :------ | :------ |
+| [ecdsaP256Sha256Signer](functions/ecdsaP256Sha256Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `ecdsa-p256-sha256`. |
+| [ecdsaP256Sha256Verifier](functions/ecdsaP256Sha256Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ecdsa-p256-sha256`. |
+| [ecdsaP384Sha384Signer](functions/ecdsaP384Sha384Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `ecdsa-p384-sha384`. |
+| [ecdsaP384Sha384Verifier](functions/ecdsaP384Sha384Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ecdsa-p384-sha384`. |
+| [ed25519Signer](functions/ed25519Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `ed25519`. |
+| [ed25519Verifier](functions/ed25519Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `ed25519`. |
+| [generateEcdsaP256Sha256KeyPair](functions/generateEcdsaP256Sha256KeyPair.md) | Generates an ECDSA P-256 key pair for the RFC 9421 `ecdsa-p256-sha256` algorithm. |
+| [generateEcdsaP384Sha384KeyPair](functions/generateEcdsaP384Sha384KeyPair.md) | Generates an ECDSA P-384 key pair for the RFC 9421 `ecdsa-p384-sha384` algorithm. |
+| [generateEd25519KeyPair](functions/generateEd25519KeyPair.md) | Generates an Ed25519 key pair for the RFC 9421 `ed25519` algorithm. |
 
 ## Interfaces
 
-- [CryptoKeyPair](interfaces/CryptoKeyPair.md)
-- [CryptoKeyStructuralFallback](interfaces/CryptoKeyStructuralFallback.md)
-- [FieldValueContext](interfaces/FieldValueContext.md)
-- [MessageComponent](interfaces/MessageComponent.md)
-- [MessageSignature](interfaces/MessageSignature.md)
-- [ParameterizedComponent](interfaces/ParameterizedComponent.md)
-- [RequestedSignOptions](interfaces/RequestedSignOptions.md)
-- [SignatureBaseOptions](interfaces/SignatureBaseOptions.md)
-- [SignatureContext](interfaces/SignatureContext.md)
-- [SignatureFields](interfaces/SignatureFields.md)
-- [SignatureRequest](interfaces/SignatureRequest.md)
-- [SignatureRequestInput](interfaces/SignatureRequestInput.md)
-- [SignedFetchOptions](interfaces/SignedFetchOptions.md)
-- [Signer](interfaces/Signer.md)
-- [SigningFetchOptions](interfaces/SigningFetchOptions.md)
-- [SignOptions](interfaces/SignOptions.md)
-- [StructuredFieldDate](interfaces/StructuredFieldDate.md)
-- [StructuredFieldDecimal](interfaces/StructuredFieldDecimal.md)
-- [StructuredFieldDisplayString](interfaces/StructuredFieldDisplayString.md)
-- [StructuredFieldToken](interfaces/StructuredFieldToken.md)
-- [VerificationContext](interfaces/VerificationContext.md)
-- [VerificationPolicy](interfaces/VerificationPolicy.md)
-- [VerifiedSignature](interfaces/VerifiedSignature.md)
-- [VerifiedSignatureContext](interfaces/VerifiedSignatureContext.md)
-- [Verifier](interfaces/Verifier.md)
-- [VerifyingFetchOptions](interfaces/VerifyingFetchOptions.md)
-- [VerifyOptions](interfaces/VerifyOptions.md)
+| Interface | Description |
+| :------ | :------ |
+| [CryptoKeyPair](interfaces/CryptoKeyPair.md) | A Web Cryptography key pair, resolved from the host runtime the same way [CryptoKey](type-aliases/CryptoKey.md) is. |
+| [CryptoKeyStructuralFallback](interfaces/CryptoKeyStructuralFallback.md) | Used as [CryptoKey](type-aliases/CryptoKey.md) when the host runtime's `crypto` global is not exposed on `typeof globalThis`, including when it is absent from ambient types or declared with `const` or `let`. It stays structurally compatible with host `CryptoKey` declarations. |
+| [FieldValueContext](interfaces/FieldValueContext.md) | Context supplied while deriving HTTP message components. |
+| [MessageComponent](interfaces/MessageComponent.md) | A normalized HTTP message component identifier with ordered parameters. |
+| [MessageSignature](interfaces/MessageSignature.md) | A parsed HTTP message signature. |
+| [ParameterizedComponent](interfaces/ParameterizedComponent.md) | A parameterized HTTP message component identifier. |
+| [RequestedSignOptions](interfaces/RequestedSignOptions.md) | Options for fulfilling an `Accept-Signature` member. |
+| [SignatureBaseOptions](interfaces/SignatureBaseOptions.md) | Options for direct signature-base creation. |
+| [SignatureContext](interfaces/SignatureContext.md) | Options shared by signature-base creation, signing, and verification. |
+| [SignatureFields](interfaces/SignatureFields.md) | The result of creating one signature, ready to be added to the corresponding HTTP fields. |
+| [SignatureRequest](interfaces/SignatureRequest.md) | A requested HTTP message signature parsed from `Accept-Signature`. |
+| [SignatureRequestInput](interfaces/SignatureRequestInput.md) | Input used to create an `Accept-Signature` member. |
+| [SignedFetchOptions](interfaces/SignedFetchOptions.md) | Options for a Fetch-compatible function that signs requests and optionally verifies responses. |
+| [Signer](interfaces/Signer.md) | A Promise-based signer implementation returned by a synchronous factory. |
+| [SigningFetchOptions](interfaces/SigningFetchOptions.md) | Options for a Fetch-compatible function that signs requests. |
+| [SignOptions](interfaces/SignOptions.md) | Sender options. |
+| [StructuredFieldDate](interfaces/StructuredFieldDate.md) | A Structured Field Date represented as integer UNIX seconds. |
+| [StructuredFieldDecimal](interfaces/StructuredFieldDecimal.md) | A Structured Field Decimal, including integral decimal values such as `1.0`. |
+| [StructuredFieldDisplayString](interfaces/StructuredFieldDisplayString.md) | A Structured Field Display String. |
+| [StructuredFieldToken](interfaces/StructuredFieldToken.md) | A Structured Field Token. Plain JavaScript strings represent Structured Field Strings. |
+| [VerificationContext](interfaces/VerificationContext.md) | Target-message context supplied to a verifier factory. |
+| [VerificationPolicy](interfaces/VerificationPolicy.md) | Explicit application policy required before a cryptographically valid signature is accepted. |
+| [VerifiedSignature](interfaces/VerifiedSignature.md) | A successfully verified signature. |
+| [VerifiedSignatureContext](interfaces/VerifiedSignatureContext.md) | Authenticated context supplied to additional application policy. |
+| [Verifier](interfaces/Verifier.md) | A Promise-based verifier implementation returned by a synchronous factory. |
+| [VerifyingFetchOptions](interfaces/VerifyingFetchOptions.md) | Options for a Fetch-compatible function that verifies responses against their requests. |
+| [VerifyOptions](interfaces/VerifyOptions.md) | Recipient options. |
 
 ## Type Aliases
 
-- [ComponentIdentifier](type-aliases/ComponentIdentifier.md)
-- [ComponentParameter](type-aliases/ComponentParameter.md)
-- [ComponentParameters](type-aliases/ComponentParameters.md)
-- [ComponentParameterValue](type-aliases/ComponentParameterValue.md)
-- [CryptoKey](type-aliases/CryptoKey.md)
-- [FieldValues](type-aliases/FieldValues.md)
-- [SignatureParameter](type-aliases/SignatureParameter.md)
-- [SignatureParameterInput](type-aliases/SignatureParameterInput.md)
-- [SignatureParameters](type-aliases/SignatureParameters.md)
-- [SignatureParameterValue](type-aliases/SignatureParameterValue.md)
-- [SignerFactory](type-aliases/SignerFactory.md)
-- [StructuredFieldType](type-aliases/StructuredFieldType.md)
-- [VerifierFactory](type-aliases/VerifierFactory.md)
+| Type Alias | Description |
+| :------ | :------ |
+| [ComponentIdentifier](type-aliases/ComponentIdentifier.md) | An HTTP message component identifier. |
+| [ComponentParameter](type-aliases/ComponentParameter.md) | An ordered HTTP message component parameter. |
+| [ComponentParameters](type-aliases/ComponentParameters.md) | Ordered parameters are recommended because their serialization order is covered by the signature. Object property insertion order is preserved when a record is supplied. |
+| [ComponentParameterValue](type-aliases/ComponentParameterValue.md) | A value supported by an HTTP message component parameter. |
+| [CryptoKey](type-aliases/CryptoKey.md) | A Web Cryptography key, resolved from the host runtime. |
+| [FieldValues](type-aliases/FieldValues.md) | Supplies individual HTTP field occurrences in wire order. |
+| [SignatureParameter](type-aliases/SignatureParameter.md) | An ordered signature metadata parameter. |
+| [SignatureParameterInput](type-aliases/SignatureParameterInput.md) | A signature metadata parameter input. |
+| [SignatureParameters](type-aliases/SignatureParameters.md) | Ordered parameters are recommended because their order is covered by the signature. Object property insertion order is preserved when a record is supplied. |
+| [SignatureParameterValue](type-aliases/SignatureParameterValue.md) | A value that can be used as an HTTP signature metadata parameter. |
+| [SignerFactory](type-aliases/SignerFactory.md) | A synchronous factory returning a signer implementation. |
+| [StructuredFieldType](type-aliases/StructuredFieldType.md) | The top-level type of an HTTP Structured Field. |
+| [VerifierFactory](type-aliases/VerifierFactory.md) | A synchronous factory that selects trusted verification key material and an algorithm. |

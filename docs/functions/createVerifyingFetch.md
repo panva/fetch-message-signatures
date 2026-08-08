@@ -2,7 +2,11 @@
 
 > **createVerifyingFetch**(`options`): (`input`, `init?`) => `Promise`<`Response`>
 
-Creates a Fetch-compatible function that verifies every response against its exact request.
+Drop-in `fetch` that verifies responses only. Requests are sent unsigned.
+
+Use this when the peer signs what it returns but does not require a signature from you. To sign
+outgoing requests as well, use [createSignedFetch](createSignedFetch.md). To sign without verifying, use
+[createSigningFetch](createSigningFetch.md).
 
 Automatic redirects are changed to manual redirects because Fetch does not expose the request
 that produced a response after following a redirect.

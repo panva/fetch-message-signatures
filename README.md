@@ -28,49 +28,53 @@ module.
 
 ## Quick Start
 
+Sign every outgoing request and send it. `createSignedFetch()` returns a drop-in `fetch`, so the
+signing and verification happen around the call you already make.
+
 ```ts
 import * as FetchSig from 'fetch-message-signatures'
 
-// 1. Generate a non-extractable private key and create its providers
-const { privateKey, publicKey } = await FetchSig.generateEd25519KeyPair()
-const signer = FetchSig.ed25519Signer(privateKey)
-const verifyWithKey = FetchSig.ed25519Verifier(publicKey)
+// 1. Your signing key, and the public key of the server you are calling
+const { privateKey } = await FetchSig.generateEd25519KeyPair()
+declare const serverPublicKey: CryptoKey
 
-// 2. Resolve trusted key material from authenticated application configuration
-const verifier: FetchSig.VerifierFactory = (signature, context) => {
-  const keyid = signature.parameters.find(([name]) => name === 'keyid')?.[1]
-  if (keyid !== 'example-key') {
-    throw new Error('Untrusted signing key')
-  }
-  return verifyWithKey(signature, context)
-}
-
-// 3. Sign a Fetch request. A `created` timestamp is added automatically
-const request = await FetchSig.sign(new Request('https://api.example/orders/123'), {
-  signer,
-  components: ['@method', '@authority', '@path'],
-  parameters: { alg: 'ed25519', keyid: 'example-key' },
-})
-
-// sig1=("@method" "@authority" "@path");created=1735689600;alg="ed25519";keyid="example-key"
-console.log(request.headers.get('signature-input'))
-// sig1=:<base64 of the 64 Ed25519 signature bytes>:
-console.log(request.headers.get('signature'))
-
-// 4. Verify it against explicit recipient policy
-const verified = await FetchSig.verify(request, {
-  verifier,
-  policy: {
-    requiredComponents: ['@method', '@authority', '@path'],
-    requiredParameters: ['created', 'alg', 'keyid'],
-    algorithms: ['ed25519'],
-    maxAge: 60,
+// 2. Wrap fetch. `sign` covers the request, `verify` covers the response it gets back
+const signedFetch = FetchSig.createSignedFetch({
+  sign: {
+    signer: FetchSig.ed25519Signer(privateKey),
+    components: ['@method', '@authority', '@path'],
+    parameters: { alg: 'ed25519', keyid: 'client-key' },
+  },
+  verify: {
+    verifier: FetchSig.ed25519Verifier(serverPublicKey),
+    policy: {
+      // ";req" binds the response to the request that produced it
+      requiredComponents: ['@status', FetchSig.component('@path', { req: true })],
+      requiredParameters: ['created', 'keyid'],
+      algorithms: ['ed25519'],
+      maxAge: 60,
+    },
   },
 })
 
-// sig1 ed25519
-console.log(verified.label, verified.algorithm)
+// 3. Send it. The request goes out signed, and this rejects rather than resolving if the
+//    response is missing a signature, carries a bad one, or fails the policy above
+const response = await signedFetch('https://api.example/orders/123')
+const order = await response.json()
 ```
+
+The request that went out carries the two fields RFC 9421 defines:
+
+```text
+signature-input: sig1=("@method" "@authority" "@path");created=1735689600;alg="ed25519";keyid="client-key"
+signature:       sig1=:<base64 of the 64 Ed25519 signature bytes>:
+```
+
+Drop `verify` to sign without checking responses, or use
+[`createSigningFetch()`](docs/functions/createSigningFetch.md) and
+[`createVerifyingFetch()`](docs/functions/createVerifyingFetch.md) for a single direction so a
+bundler can omit the other. To sign or verify a message you already hold, rather than wrapping
+`fetch`, use [`sign()`](docs/functions/sign.md) and [`verify()`](docs/functions/verify.md).
 
 The bytes that were signed are one canonicalized line per covered component plus the
 `@signature-params` line, which repeats the `Signature-Input` member value. `createSignatureBase()`
@@ -80,7 +84,7 @@ returns exactly that string, which is the first thing to compare when two implem
 "@method": GET
 "@authority": api.example
 "@path": /orders/123
-"@signature-params": ("@method" "@authority" "@path");created=1735689600;alg="ed25519";keyid="example-key"
+"@signature-params": ("@method" "@authority" "@path");created=1735689600;alg="ed25519";keyid="client-key"
 ```
 
 ## [Guides](guides/README.md)
