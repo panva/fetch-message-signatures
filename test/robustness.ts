@@ -2129,7 +2129,7 @@ describe('unspoofable value brands', () => {
             components: [],
             parameters: [['example', value as unknown as Uint8Array]],
           }),
-        /has an unsupported value/,
+        /must be a plain object/,
       )
     }
 
@@ -2153,51 +2153,24 @@ describe('unspoofable value brands', () => {
 })
 
 describe('verification policy snapshot', () => {
-  it('validates and stores the same read of every policy member', async () => {
-    // Reading a member twice would let an accessor return a different value than the one that
-    // passed validation, which is exactly what snapshotting the policy is meant to prevent.
-    const signed = await sign(rfcRequest(), {
-      signer: webCryptoSigner(),
-      components: ['@method'],
-      parameters: { created: RFC_CREATED },
-    })
-
-    let maxAgeReads = 0
+  it('rejects an accessor without defining its read semantics', async () => {
+    let reads = 0
     await assert.rejects(
-      verify(signed, {
+      verify(new Request('https://example.com/'), {
         verifier: webCryptoVerifier(),
         policy: {
           requiredComponents: [],
           requiredParameters: [],
           algorithms: ['hmac-sha256'],
-          now: RFC_CREATED + 10_000,
           get maxAge() {
-            maxAgeReads++
-            return maxAgeReads <= 3 ? 60 : Number.NaN
+            reads++
+            return 60
           },
         },
       }),
-      /older than policy permits/,
+      /"policy" must contain only enumerable data properties/,
     )
-    assert.equal(maxAgeReads, 1)
-
-    let parametersReads = 0
-    await assert.rejects(
-      verify(signed, {
-        verifier: webCryptoVerifier(),
-        policy: {
-          requiredComponents: [],
-          algorithms: ['hmac-sha256'],
-          now: RFC_CREATED,
-          get requiredParameters() {
-            parametersReads++
-            return parametersReads <= 2 ? ['nonce'] : []
-          },
-        },
-      }),
-      /Required signature parameter "nonce" is missing/,
-    )
-    assert.equal(parametersReads, 1)
+    assert.equal(reads, 0)
   })
 })
 
@@ -2610,32 +2583,7 @@ describe('fetch wrapper resource and transport handling', () => {
     assert.equal(Object.getPrototypeOf(copied), Object.prototype)
   })
 
-  it('accepts a callable initializer carrying runtime options', async () => {
-    // A function is an object and can carry dictionary members, which some runtimes read.
-    let observed: Record<string, unknown> | undefined
-    const signingFetch = createSigningFetch({
-      sign: {
-        signer: webCryptoSigner(),
-        components: ['@method'],
-        parameters: { created: RFC_CREATED },
-      },
-      fetch: (async (_input, init) => {
-        observed = init as Record<string, unknown>
-        return new Response(null)
-      }) as typeof fetch,
-    })
-
-    const callable = Object.assign(() => {}, {
-      unix: '/var/run/api.sock',
-    }) as unknown as RequestInit
-    await signingFetch('https://example.com/', callable)
-    assert.equal(observed!['unix'], '/var/run/api.sock')
-  })
-
-  it('leaves the signed request exactly as the Fetch constructor built it', async () => {
-    // The wrapper must not discover or normalize the initializer itself: whatever `new Request()`
-    // makes of it is what gets signed. Inherited and non-enumerable members are the cases that
-    // distinguish reading the dictionary the way Fetch does from enumerating the object.
+  it('leaves the signed request exactly as the ordinary initializer built it', async () => {
     let observed!: Request
     const signingFetch = createSigningFetch({
       sign: {
@@ -2649,127 +2597,71 @@ describe('fetch wrapper resource and transport handling', () => {
       }) as unknown as typeof fetch,
     })
 
-    const nonEnumerable = {} as RequestInit
-    Object.defineProperty(nonEnumerable, 'method', { value: 'POST', enumerable: false })
-    Object.defineProperty(nonEnumerable, 'headers', {
-      value: { 'x-carried': 'yes' },
-      enumerable: false,
+    const controller = new AbortController()
+    await signingFetch('https://example.com/', {
+      method: 'POST',
+      headers: { 'x-carried': 'yes' },
+      signal: controller.signal,
     })
-    await signingFetch('https://example.com/', nonEnumerable)
     assert.equal(observed.method, 'POST')
     assert.equal(observed.headers.get('x-carried'), 'yes')
     assert.equal(observed.headers.has('signature'), true)
-
-    const inherited = Object.create({ method: 'PUT' }) as RequestInit
-    await signingFetch('https://example.com/', inherited)
-    assert.equal(observed.method, 'PUT')
-
-    const controller = new AbortController()
-    const inheritedSignal = Object.create({ signal: controller.signal }) as RequestInit
-    await signingFetch('https://example.com/', inheritedSignal)
     assert.equal(observed.signal.aborted, false)
     controller.abort(new Error('propagated'))
     assert.equal(observed.signal.aborted, true)
   })
 
-  it('does not enumerate the initializer before the request is built', async () => {
-    // Object.keys() runs a Proxy's ownKeys and getOwnPropertyDescriptor traps, which Web IDL
-    // dictionary conversion never does. Discovering extension members before construction would let
-    // those traps change the message that is about to be signed.
-    let observed!: Request
-    let method = 'GET'
+  it('rejects non-ordinary initializers without evaluating accessors', async () => {
+    let transportCalls = 0
     const signingFetch = createSigningFetch({
       sign: {
         signer: webCryptoSigner(),
         components: ['@method'],
         parameters: { created: RFC_CREATED },
       },
-      fetch: (async (input: Request) => {
-        observed = input
-        return new Response(null)
-      }) as unknown as typeof fetch,
-    })
-
-    const target = {} as RequestInit
-    Object.defineProperty(target, 'method', { enumerable: false, get: () => method })
-    const init = new Proxy(target, {
-      ownKeys: (proxied) => {
-        method = 'POST'
-        return Reflect.ownKeys(proxied)
-      },
-    })
-
-    await signingFetch('https://example.com/', init)
-    assert.equal(observed.method, 'GET')
-  })
-
-  it('lets the implementation decide whether a failing transport option stops the request', async () => {
-    // Whether a lookup failure matters depends on whether the active implementation asks for the
-    // option, which cannot be inferred from its name: Bun reads proxy, tls, and unix, Node.js does
-    // not implement any of them. Reading it here instead would either silently downgrade a required
-    // proxy to an ordinary connection, or reject a request the implementation would have accepted.
-    let reads = 0
-    // A class getter lives on the prototype and is non-enumerable, which is the ordinary shape a
-    // configuration object takes.
-    class TransportOptions {
-      get proxy(): never {
-        reads++
-        throw new Error('proxy unavailable')
-      }
-    }
-    assert.equal(Object.hasOwn(new TransportOptions(), 'proxy'), false)
-
-    // An implementation that consumes the option must see the failure before its transport proceeds.
-    let dispatched = 0
-    const consuming = createSigningFetch({
-      sign: {
-        signer: webCryptoSigner(),
-        components: ['@method'],
-        parameters: { created: RFC_CREATED },
-      },
-      fetch: (async (_input, init) => {
-        void (init as Record<string, unknown> | undefined)?.['proxy']
-        dispatched++
+      fetch: (async () => {
+        transportCalls++
         return new Response(null)
       }) as typeof fetch,
     })
 
-    await assert.rejects(
-      consuming('https://example.com/', new TransportOptions() as RequestInit),
-      /proxy unavailable/,
-    )
-    assert.equal(reads, 1, 'the consuming implementation reads it exactly once')
-    assert.equal(dispatched, 0, 'the failure must precede the transport')
-
-    // An implementation that does not know the option never evaluates it, so the request proceeds.
-    reads = 0
-    let observed!: Request
-    const ignoring = createSigningFetch({
-      sign: {
-        signer: webCryptoSigner(),
-        components: ['@method'],
-        parameters: { created: RFC_CREATED },
+    let reads = 0
+    const accessor = {} as RequestInit
+    Object.defineProperty(accessor, 'proxy', {
+      enumerable: true,
+      get() {
+        reads++
+        return 'http://proxy.example'
       },
-      fetch: (async (input: Request) => {
-        observed = input
-        return new Response(null)
-      }) as unknown as typeof fetch,
     })
+    const hidden = {} as RequestInit
+    Object.defineProperty(hidden, 'proxy', { enumerable: false, value: 'http://proxy.example' })
 
-    await ignoring('https://example.com/', new TransportOptions() as RequestInit)
-    assert.equal(reads, 0, 'the wrapper itself must not read it')
-    assert.equal(observed.headers.has('signature'), true)
+    for (const init of [
+      Object.assign(() => {}, { unix: '/var/run/api.sock' }),
+      Object.create({ unix: '/var/run/api.sock' }),
+      accessor,
+      hidden,
+    ]) {
+      await assert.rejects(
+        signingFetch('https://example.com/', init as RequestInit),
+        /Request initializer must/,
+      )
+    }
+    assert.equal(reads, 0)
+    assert.equal(transportCalls, 0)
   })
 
-  it('treats an accessor descriptor with no getter as an accessor, not as data', async () => {
-    // A data descriptor owns "value", while an accessor descriptor owns "get" and "set" even when both are
-    // undefined. Classifying by the accessor values instead would snapshot this one, so redefining
-    // the property before dispatch would no longer be visible.
-    let seen: unknown
+  it('captures a transport option at invocation, not at dispatch', async () => {
+    // fetch() reads its initializer at once. A caller that reuses one initializer and assigns to it
+    // again while an earlier signature is still pending must see the earlier request keep the value
+    // it was called with. Assigning undefined would otherwise turn a request that had to use a proxy
+    // into a direct connection.
     let release!: () => void
     const blocked = new Promise<void>((resolve) => {
       release = resolve
     })
+    let seen: unknown
     const signingFetch = createSigningFetch({
       sign: {
         signer: () => ({
@@ -2788,65 +2680,16 @@ describe('fetch wrapper resource and transport handling', () => {
       }) as typeof fetch,
     })
 
-    const init = {} as RequestInit
-    Object.defineProperty(init, 'proxy', {
-      get: undefined,
-      set: undefined,
-      enumerable: true,
-      configurable: true,
-    })
-
+    const original = { id: 'first' }
+    const init = { proxy: original } as RequestInit & { proxy: object }
     const pending = signingFetch('https://example.com/', init)
     await Promise.resolve()
-    Object.defineProperty(init, 'proxy', { value: 'http://proxy.example', enumerable: true })
+    // Reuse the initializer for a later request while the first signature is still pending.
+    init.proxy = { id: 'second' }
     release()
     await pending
 
-    assert.equal(seen, 'http://proxy.example')
-  })
-
-  it('captures a transport option at invocation, not at dispatch', async () => {
-    // fetch() reads its initializer at once. A caller that reuses one initializer and assigns to it
-    // again while an earlier signature is still pending must see the earlier request keep the value
-    // it was called with. Assigning undefined would otherwise turn a request that had to use a proxy
-    // into a direct connection.
-    for (const shape of ['own', 'inherited'] as const) {
-      let release!: () => void
-      const blocked = new Promise<void>((resolve) => {
-        release = resolve
-      })
-      let seen: unknown
-      const signingFetch = createSigningFetch({
-        sign: {
-          signer: () => ({
-            alg: 'test',
-            async sign() {
-              await blocked
-              return new Uint8Array([1])
-            },
-          }),
-          components: ['@method'],
-          parameters: { created: RFC_CREATED },
-        },
-        fetch: (async (_input, init) => {
-          seen = (init as Record<string, unknown> | undefined)?.['proxy']
-          return new Response(null)
-        }) as typeof fetch,
-      })
-
-      const original = { id: 'first' }
-      const carrier = { proxy: original }
-      const init = (shape === 'own' ? carrier : Object.create(carrier)) as RequestInit
-
-      const pending = signingFetch('https://example.com/', init)
-      await Promise.resolve()
-      // Reuse the initializer for a later request while the first signature is still pending.
-      carrier.proxy = { id: 'second' }
-      release()
-      await pending
-
-      assert.equal(seen, original, shape)
-    }
+    assert.equal(seen, original)
   })
 
   it('forwards an own enumerable option it does not know by name', async () => {
@@ -2870,88 +2713,6 @@ describe('fetch wrapper resource and transport handling', () => {
     await signingFetch('https://example.com/', { someFutureTransportOption: marker } as RequestInit)
 
     assert.equal(observed!['someFutureTransportOption'], marker)
-  })
-
-  it('reads an own-enumerable accessor against the caller as receiver', async () => {
-    // The value is read with a plain Get on the caller's object, which is the operation Fetch
-    // performs. Copying the property descriptor instead would rebind a getter to the forwarded
-    // object, where the state it reads does not exist.
-    let observed: Record<string, unknown> | undefined
-    const signingFetch = createSigningFetch({
-      sign: {
-        signer: webCryptoSigner(),
-        components: ['@method'],
-        parameters: { created: RFC_CREATED },
-      },
-      fetch: (async (_input, init) => {
-        observed = init as Record<string, unknown>
-        return new Response(null)
-      }) as typeof fetch,
-    })
-
-    const init = {} as RequestInit
-    let receiverWasCaller = false
-    Object.defineProperty(init, 'unix', {
-      enumerable: true,
-      get(this: unknown) {
-        // Asserted on identity rather than on borrowed state, because any state held as another
-        // own enumerable member would be forwarded too and would mask a rebound receiver.
-        receiverWasCaller = this === init
-        return receiverWasCaller ? '/var/run/api.sock' : undefined
-      },
-    })
-
-    await signingFetch('https://example.com/', init)
-    assert.equal(observed!['unix'], '/var/run/api.sock')
-    assert.equal(receiverWasCaller, true)
-  })
-
-  it('forwards a non-enumerable protocol option', async () => {
-    let observed: Record<string, unknown> | undefined
-    const signingFetch = createSigningFetch({
-      sign: {
-        signer: webCryptoSigner(),
-        components: ['@method'],
-        parameters: { created: RFC_CREATED },
-      },
-      fetch: (async (_input, init) => {
-        observed = init as Record<string, unknown>
-        return new Response(null)
-      }) as typeof fetch,
-    })
-
-    const init = {} as RequestInit
-    Object.defineProperty(init, 'protocol', { value: 'http2', enumerable: false })
-
-    await signingFetch('https://example.com/', init)
-    assert.equal(observed!['protocol'], 'http2')
-  })
-
-  it('forwards runtime-only options that are inherited or non-enumerable', async () => {
-    // A runtime reads its own fetch options with a plain property lookup, so an initializer can
-    // carry them on a prototype or as a non-enumerable property and still work when passed to fetch
-    // directly. Object.keys() cannot see either.
-    let observed: Record<string, unknown> | undefined
-    const signingFetch = createSigningFetch({
-      sign: {
-        signer: webCryptoSigner(),
-        components: ['@method'],
-        parameters: { created: RFC_CREATED },
-      },
-      fetch: (async (_input, init) => {
-        observed = init as Record<string, unknown>
-        return new Response(null)
-      }) as typeof fetch,
-    })
-
-    const inherited = Object.create({ unix: '/var/run/api.sock' }) as RequestInit
-    await signingFetch('https://example.com/', inherited)
-    assert.equal(observed!['unix'], '/var/run/api.sock')
-
-    const hidden = {} as RequestInit
-    Object.defineProperty(hidden, 'proxy', { value: 'http://proxy.example', enumerable: false })
-    await signingFetch('https://example.com/', hidden)
-    assert.equal(observed!['proxy'], 'http://proxy.example')
   })
 
   it('gives up on an abort raised after verification is already in flight', async () => {

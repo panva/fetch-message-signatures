@@ -68,6 +68,14 @@ algorithm and signature encoding named by RFC 9421, keep keys appropriately prot
 cryptographic verification primitive, and perform constant-time comparison where required. Provider
 exceptions and detailed key-store errors should not be exposed to unauthenticated callers.
 
+Application configuration is also part of the trusted computing base. Configuration records must be
+ordinary data objects: object literals or null-prototype objects with own enumerable data
+properties. The package does not define behavior for application-authored accessors, inherited or
+non-enumerable configuration, class instances, or Proxies, and does not attempt to detect a Proxy
+that imitates an ordinary object. Fetch-wrapper initializers follow the same ordinary-data contract.
+This contract does not apply to peer-derived messages or provider implementations; those retain
+their own documented validation and runtime semantics.
+
 ## Vulnerability boundaries
 
 The following are normally application or protocol-design responsibilities unless

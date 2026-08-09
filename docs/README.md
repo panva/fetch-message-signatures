@@ -8,6 +8,10 @@ Implements the sender, recipient, and `Accept-Signature` operations from [RFC
 Cryptography implementations of the ECDSA, Ed25519, and RSA signature algorithms, and supports
 custom cryptographic providers.
 
+Package configuration records, including Fetch-wrapper `RequestInit` values, must be object
+literals or null-prototype objects containing only own enumerable data properties. Messages,
+headers, provider implementations, and host objects retain their own documented semantics.
+
 ## Examples
 
 Sign and verify a request with Ed25519 through Web Cryptography.

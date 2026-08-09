@@ -24,7 +24,7 @@ describe('Accept-Signature boundary behavior', () => {
   for (const [name, input, pattern] of [
     ['an empty request list', [], /non-empty array/],
     ['a non-array request list', null, /non-empty array/],
-    ['a null request', [null], /Invalid signature request/],
+    ['a null request', [null], /Signature request.*object/],
     [
       'an invalid label',
       [{ label: 'Uppercase', components: ['@status'] }],
@@ -74,6 +74,27 @@ describe('Accept-Signature boundary behavior', () => {
 
     assert.equal(value, 'sig=("@status");alg="future-example-alg"')
     assert.deepEqual(parseAcceptSignature(value)[0]?.parameters, [['alg', 'future-example-alg']])
+  })
+
+  it('requires ordinary request and fulfillment configuration records', async () => {
+    class RequestConfiguration {
+      readonly label = 'sig'
+      readonly components = ['@status']
+    }
+    assert.throws(
+      () => createAcceptSignature([new RequestConfiguration()]),
+      /Signature request must be a plain object/,
+    )
+
+    const requested = parseAcceptSignature('sig=("@status")')[0]!
+    class FulfillmentConfiguration {
+      readonly signer = webCryptoSigner()
+      readonly now = RFC_CREATED
+    }
+    await assert.rejects(
+      createRequestedSignature(new Response(null), requested, new FulfillmentConfiguration()),
+      /"options" must be a plain object/,
+    )
   })
 
   it('rejects a label duplicated across an existing and appended field value', () => {

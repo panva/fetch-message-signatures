@@ -7,6 +7,10 @@
  * Cryptography implementations of the ECDSA, Ed25519, and RSA signature algorithms, and supports
  * custom cryptographic providers.
  *
+ * Package configuration records, including Fetch-wrapper `RequestInit` values, must be object
+ * literals or null-prototype objects containing only own enumerable data properties. Messages,
+ * headers, provider implementations, and host objects retain their own documented semantics.
+ *
  * @module fetch-message-signatures
  * @example
  *
@@ -2645,6 +2649,9 @@ export function component(
   if (typeof name !== 'string') {
     fail('"name" must be a string')
   }
+  if (!Array.isArray(parameters)) {
+    assertConfigurationObject(parameters, '"parameters"')
+  }
   return { name: name.startsWith('@') ? name : name.toLowerCase(), parameters }
 }
 
@@ -2796,6 +2803,41 @@ export function findComponents(
 }
 
 /**
+ * Rejects a package configuration record that is not a plain record of own, enumerable data
+ * properties.
+ *
+ * Configuration is trusted application input, so this is a contract check rather than a defense
+ * against a Proxy that lies to reflection. Messages, host objects, and provider implementations are
+ * deliberately outside this contract; Fetch-wrapper initializers follow it.
+ */
+function assertConfigurationObject<T>(value: T, description: string): asserts value is T & object {
+  if (value === null || typeof value !== 'object') {
+    fail(`${description} must be an object`)
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    fail(`${description} must be a plain object`)
+  }
+  for (const name of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, name)
+    if (
+      descriptor === undefined ||
+      !Object.hasOwn(descriptor, 'value') ||
+      descriptor.enumerable !== true
+    ) {
+      fail(`${description} must contain only enumerable data properties`)
+    }
+  }
+}
+
+/** Applies the ordinary-data contract to the record nested in shared signature options. */
+function assertSignatureContextConfiguration(context: Readonly<SignatureContext>): void {
+  if (context.structuredFields !== undefined) {
+    assertConfigurationObject(context.structuredFields, '"structuredFields"')
+  }
+}
+
+/**
  * Normalizes the two accepted parameter inputs, an ordered array of tuples or a plain object, into
  * an ordered array of entries.
  *
@@ -2816,9 +2858,7 @@ function orderedParameterEntries<T>(
       return [entry[0], entry[1]]
     })
   }
-  if (parameters === null || typeof parameters !== 'object') {
-    fail('Parameters must be an ordered array or object')
-  }
+  assertConfigurationObject(parameters, 'Parameters')
   return Object.entries(parameters) as Array<[string, T]>
 }
 
@@ -2861,6 +2901,9 @@ function sfBareItemFromSignatureParameter(
   }
   if (isUint8Array(value)) {
     return { kind: 'binary', value: cloneBytes(value) }
+  }
+  if (value !== null && typeof value === 'object') {
+    assertConfigurationObject(value, `Signature parameter "${name}"`)
   }
   if (
     value !== null &&
@@ -3122,11 +3165,15 @@ function toMessageComponent(input: ComponentIdentifier): MessageComponent {
   let parameters: ComponentParameters | undefined
   if (typeof input === 'string') {
     name = input
-  } else if (input !== null && typeof input === 'object' && typeof input.name === 'string') {
+  } else if (input === null || typeof input !== 'object') {
+    return fail('Invalid HTTP message component identifier')
+  } else {
+    assertConfigurationObject(input, 'HTTP message component identifier')
+    if (typeof input.name !== 'string') {
+      return fail('Invalid HTTP message component identifier')
+    }
     name = input.name
     parameters = input.parameters
-  } else {
-    return fail('Invalid HTTP message component identifier')
   }
 
   if (!name.startsWith('@')) {
@@ -4182,10 +4229,9 @@ export function createSignatureBase(
   options: SignatureBaseOptions,
 ): string {
   assertMessage(message)
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
   assertSignatureContext(options)
+  assertSignatureContextConfiguration(options)
   const components = normalizeComponents(options.components)
   const parameters = normalizeSignatureParameters(options.parameters, undefined)
   return buildSignatureBase(message, components, parameters, options)
@@ -4236,9 +4282,7 @@ export function createSignatureBase(
  * @group Sender
  */
 export function createSignatureFields(options: SignatureFieldsOptions): SignatureFields {
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
   const label = options.label ?? 'sig1'
   assertSfKey(label, 'Signature label')
   if (!isUint8Array(options.signature)) {
@@ -4687,6 +4731,7 @@ function cloneSignatureParameterValue(value: SignatureParameterValue): Signature
     return cloneBytes(value)
   }
   if (value !== null && typeof value === 'object') {
+    assertConfigurationObject(value, 'Signature parameter value')
     return { ...value }
   }
   return value
@@ -4751,10 +4796,9 @@ async function createSignatureInternal(
   options: SignOptions,
 ): Promise<SignatureCreation> {
   assertMessage(message)
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
   assertSignatureContext(options)
+  assertSignatureContextConfiguration(options)
   const label = options.label ?? 'sig1'
   assertSfKey(label, 'Signature label')
 
@@ -5192,12 +5236,8 @@ interface NormalizedVerificationPolicy extends VerificationPolicy {
  * is reported before any message is processed.
  */
 function snapshotVerificationPolicy(policy: VerificationPolicy): NormalizedVerificationPolicy {
-  if (policy === null || typeof policy !== 'object') {
-    fail('"policy" must be an object')
-  }
-  // Every member is read exactly once, into a local, and only the local is validated and stored.
-  // Reading a member again to store it would let an accessor return a different value than the one
-  // that passed validation, which would defeat the point of snapshotting the policy.
+  assertConfigurationObject(policy, '"policy"')
+  // Store the configuration's ordinary data values before any asynchronous verification begins.
   const requiredComponents = policy.requiredComponents
   const requiredParameters = policy.requiredParameters
   const algorithms = policy.algorithms
@@ -5404,10 +5444,9 @@ export async function verify(
   options: VerifyOptions,
 ): Promise<VerifiedSignature> {
   assertMessage(message)
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
   assertSignatureContext(options)
+  assertSignatureContextConfiguration(options)
   const policy = snapshotVerificationPolicy(options.policy)
   const selected = selectSignature(message, options.label)
   for (const identifier of selected.input.components) {
@@ -5677,9 +5716,7 @@ export function createAcceptSignature(requests: ReadonlyArray<SignatureRequestIn
   }
   const dictionary: SfDictionary = []
   for (const request of requests) {
-    if (request === null || typeof request !== 'object') {
-      fail('Invalid signature request')
-    }
+    assertConfigurationObject(request, 'Signature request')
     assertSfKey(request.label, 'Signature request label')
     if (dictionary.some(([label]) => label === request.label)) {
       fail(`Duplicate signature request label "${request.label}"`)
@@ -5913,9 +5950,9 @@ function requestedSignatureOptions(
   if (request === null || typeof request !== 'object') {
     fail('"request" must be a SignatureRequest')
   }
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
+  assertSignatureContext(options)
+  assertSignatureContextConfiguration(options)
   assertSfKey(request.label, 'Signature request label')
   const components = normalizeComponents(request.components)
   assertUniqueComponents(components)
@@ -6082,7 +6119,16 @@ function snapshotStructuredFields(
   if (structuredFields === undefined) {
     return undefined
   }
-  return Object.fromEntries(Object.entries(structuredFields))
+  const snapshot = Object.create(null) as Record<string, StructuredFieldType>
+  for (const [name, type] of Object.entries(structuredFields)) {
+    Object.defineProperty(snapshot, name, {
+      configurable: false,
+      enumerable: true,
+      value: type,
+      writable: false,
+    })
+  }
+  return Object.freeze(snapshot)
 }
 
 /**
@@ -6097,6 +6143,7 @@ function snapshotSignatureParameterInput(value: SignatureParameterInput): Signat
     return cloneBytes(value)
   }
   if (value !== null && typeof value === 'object') {
+    assertConfigurationObject(value, 'Signature parameter value')
     return { ...value }
   }
   return value
@@ -6122,10 +6169,9 @@ function snapshotSignatureParameters(
 function snapshotFetchWrapperSignOptions(
   options: Omit<SignOptions, 'request'>,
 ): Omit<SignOptions, 'request'> {
-  if (options === null || typeof options !== 'object') {
-    fail('"options.sign" must be an object')
-  }
+  assertConfigurationObject(options, '"options.sign"')
   assertSignatureContext(options)
+  assertSignatureContextConfiguration(options)
   return {
     signer: options.signer,
     components: normalizeComponents(options.components),
@@ -6141,10 +6187,9 @@ function snapshotFetchWrapperSignOptions(
 function snapshotFetchWrapperVerifyOptions(
   options: Omit<VerifyOptions, 'request'>,
 ): Omit<VerifyOptions, 'request'> {
-  if (options === null || typeof options !== 'object') {
-    fail('"options.verify" must be an object')
-  }
+  assertConfigurationObject(options, '"options.verify"')
   assertSignatureContext(options)
+  assertSignatureContextConfiguration(options)
   return {
     verifier: options.verifier,
     policy: snapshotVerificationPolicy(options.policy),
@@ -6175,6 +6220,9 @@ function resolveFetchImplementation(
  * An explicitly configured `redirect` mode is left as the caller set it.
  */
 function createFetchRequest(input: RequestInfo | URL, init?: RequestInit): Request {
+  if (init !== undefined && init !== null) {
+    assertConfigurationObject(init, 'Request initializer')
+  }
   let request = new Request(input, init)
   if (request.redirect === 'follow') {
     request = new Request(request, {
@@ -6206,50 +6254,6 @@ const STANDARD_REQUEST_INIT = new Set([
 ])
 
 /**
- * Runtime-specific `fetch()` options this package knows by name, probed even when they are not own
- * enumerable properties of the initializer.
- *
- * Each selects a transport rather than a message, so dropping one can turn a request that had to go
- * through a proxy, a Unix socket, or a specific TLS configuration into an ordinary connection.
- */
-const RUNTIME_FETCH_OPTIONS = [
-  // Cloudflare Workers
-  'cf',
-  // Deno
-  'client',
-  // Node.js (undici)
-  'dispatcher',
-  // Bun
-  'decompress',
-  'protocol',
-  'proxy',
-  's3',
-  'tls',
-  'unix',
-  'verbose',
-]
-
-/**
- * Finds an initializer member anywhere on its prototype chain, without evaluating an accessor.
- *
- * The descriptor, rather than the value, is what decides how the member is forwarded, so an
- * inherited data property is snapshotted like an own one and an inherited accessor stays deferred.
- */
-function findInitMember(source: object, name: string): PropertyDescriptor | undefined {
-  for (
-    let current: object | null = source;
-    current !== null;
-    current = Object.getPrototypeOf(current)
-  ) {
-    const descriptor = Object.getOwnPropertyDescriptor(current, name)
-    if (descriptor !== undefined) {
-      return descriptor
-    }
-  }
-  return undefined
-}
-
-/**
  * Builds the initializer forwarded to the underlying `fetch` alongside the signed request.
  *
  * Runtimes define transport options outside Fetch: `dispatcher` on Node.js, `client` on Deno, `cf`
@@ -6258,9 +6262,9 @@ function findInitMember(source: object, name: string): PropertyDescriptor | unde
  * that request to the underlying `fetch` would drop any option the runtime does not itself attach
  * to the request, opening an ordinary connection where the caller required a proxy, a client
  * certificate, or a Unix socket. Which options survive a reconstruction on their own varies by
- * runtime, so they are forwarded regardless. For a data property that costs nothing, because the
- * value forwarded is the one captured at invocation. An option implemented as an accessor is read
- * again by the implementation at dispatch.
+ * runtime, so every own enumerable extension member is forwarded. Initializers follow the package's
+ * ordinary-data contract: inherited, non-enumerable, accessor, callable, and class-based shapes are
+ * rejected before signing rather than assigned special forwarding semantics.
  *
  * Other standard members are deliberately excluded: they are already on the signed request, and
  * forwarding `headers` in particular would replace the signature fields. `referrer` and
@@ -6268,30 +6272,15 @@ function findInitMember(source: object, name: string): PropertyDescriptor | unde
  * initializer, because a non-empty initializer makes the implementation rebuild the request and
  * that rebuild would otherwise reset them.
  *
- * This reads the caller's initializer, and only ever after the request has been built from it, so
- * nothing here can change the message that gets signed.
- *
- * How a member is forwarded depends on its property descriptor, because the two shapes need
- * opposite treatment.
- *
  * A data property is captured here, while this call is still synchronous with the caller's
  * invocation, which is when `fetch()` reads its own initializer. A caller that reuses one
  * initializer and assigns to it again while an earlier signature is still pending therefore keeps
  * the value the earlier request was called with. Deferring that read would let a later assignment
  * change the transport of a request already in flight, and assigning `undefined` would turn a
  * request that had to use a proxy into a direct connection.
- *
- * An accessor stays deferred, so the active implementation decides whether to evaluate it. That is
- * what makes a failing lookup mean the right thing: a transport option the implementation asks for
- * propagates its failure and stops the request, while one this runtime does not implement is never
- * evaluated. Reading it here instead would make a required proxy, client certificate, or socket
- * silently degrade into an ordinary connection, or fail a request the implementation would have
- * accepted. The cost is that an accessor may be read at dispatch, and more than once, and no
- * single-read guarantee applies to one. The two properties cannot both hold for the same member.
  */
 function runtimeFetchOptions(request: Request, init?: RequestInit): RequestInit | undefined {
-  // A function is an object and can carry dictionary members, which some runtimes read.
-  if (init === null || (typeof init !== 'object' && typeof init !== 'function')) {
+  if (init === null || init === undefined) {
     return undefined
   }
 
@@ -6299,54 +6288,32 @@ function runtimeFetchOptions(request: Request, init?: RequestInit): RequestInit 
   // Null-prototype, and members are installed with defineProperty rather than assignment, so that
   // nothing the caller did not put here can be read back out as a standard member.
   let forwarded: Record<string, unknown> | undefined
-  const carry = (name: string, descriptor: PropertyDescriptor) => {
+  const carry = (name: string, value: unknown) => {
     forwarded ??= Object.create(null) as Record<string, unknown>
-    Object.defineProperty(
-      forwarded,
-      name,
-      // A data descriptor owns "value", while an accessor descriptor owns "get" and "set" even when both
-      // are undefined, so the presence of the field is what distinguishes them.
-      Object.hasOwn(descriptor, 'value')
-        ? { configurable: true, enumerable: true, value: descriptor.value, writable: true }
-        : { configurable: true, enumerable: true, get: () => source[name] },
-    )
+    Object.defineProperty(forwarded, name, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    })
   }
-  const handled = new Set<string>()
 
-  // Own enumerable members cover the ordinary object literal a caller writes.
+  // Every own member has already been checked to be an enumerable data property.
   for (const name of Object.keys(source)) {
-    handled.add(name)
     // "__proto__" is not a Fetch member, and carrying it only creates the risk that something
     // downstream copies it onto an ordinary object and installs a prototype from it. An initializer
     // parsed from untrusted JSON is the one realistic way this key arrives.
     if (STANDARD_REQUEST_INIT.has(name) || name === '__proto__') {
       continue
     }
-    const descriptor = Object.getOwnPropertyDescriptor(source, name)
-    if (descriptor !== undefined) {
-      carry(name, descriptor)
-    }
-  }
-
-  // The runtimes read their own options with a plain property lookup, so an initializer that
-  // inherits one from a prototype, or defines it as non-enumerable, still works when passed to
-  // `fetch` directly. A class instance with a getter is exactly that shape. Those are invisible to
-  // Object.keys, so the known names are looked up along the prototype chain instead.
-  for (const name of RUNTIME_FETCH_OPTIONS) {
-    if (handled.has(name)) {
-      continue
-    }
-    const descriptor = findInitMember(source, name)
-    if (descriptor !== undefined) {
-      carry(name, descriptor)
-    }
+    carry(name, Object.getOwnPropertyDescriptor(source, name)!.value)
   }
 
   if (forwarded === undefined) {
     return undefined
   }
-  forwarded['referrer'] = request.referrer
-  forwarded['referrerPolicy'] = request.referrerPolicy
+  carry('referrer', request.referrer)
+  carry('referrerPolicy', request.referrerPolicy)
   return forwarded as RequestInit
 }
 
@@ -6492,9 +6459,7 @@ function cancelUndeliveredBody(message: Request | Response): void {
  * @group Fetch Wrappers
  */
 export function createSigningFetch(options: SigningFetchOptions): typeof globalThis.fetch {
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
   const implementation = resolveFetchImplementation(options)
   const signOptions = snapshotFetchWrapperSignOptions(options.sign)
 
@@ -6567,9 +6532,7 @@ export function createSigningFetch(options: SigningFetchOptions): typeof globalT
  * @group Fetch Wrappers
  */
 export function createVerifyingFetch(options: VerifyingFetchOptions): typeof globalThis.fetch {
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
   const implementation = resolveFetchImplementation(options)
   const verifyOptions = snapshotFetchWrapperVerifyOptions(options.verify)
 
@@ -6642,9 +6605,7 @@ export function createVerifyingFetch(options: VerifyingFetchOptions): typeof glo
  * @group Fetch Wrappers
  */
 export function createSignedFetch(options: SignedFetchOptions): typeof globalThis.fetch {
-  if (options === null || typeof options !== 'object') {
-    fail('"options" must be an object')
-  }
+  assertConfigurationObject(options, '"options"')
   const implementation = resolveFetchImplementation(options)
   const signOptions = snapshotFetchWrapperSignOptions(options.sign)
   const verifyOptions =

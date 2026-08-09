@@ -123,6 +123,12 @@ verify by attaching the returned field values itself. The built-in cryptographic
 the Web Cryptography API and runtime support for the selected algorithm. The package does not
 provide polyfills.
 
+Package configuration records must be object literals or null-prototype objects whose own members
+are enumerable data properties. Frozen records are supported; class instances, inherited or
+non-enumerable configuration, accessors, and Proxies are not. Fetch-wrapper `RequestInit` values
+follow the same rule. This restriction does not apply to message and header inputs, cryptographic
+provider implementations, or host objects such as `CryptoKey`, `Request`, `Response`, and `Headers`.
+
 Structured Field Byte Sequences use `Uint8Array.prototype.toBase64()` and `Uint8Array.fromBase64()`
 where they are available, and fall back to `btoa()` and `atob()` where they are not. Both paths
 produce the same results and are covered by the test suite.

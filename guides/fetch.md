@@ -237,11 +237,12 @@ message, such as `dispatcher` on Node.js, `client` on Deno, `cf` on Cloudflare W
 required proxy or client certificate is not silently bypassed. Whether a given option would have
 survived the reconstruction on its own varies by runtime, so it is forwarded either way. A data
 property is captured when the wrapper is called, matching what `fetch()` itself reads, so reusing
-and reassigning one initializer cannot change the transport of a request already in flight. An
-option implemented as an accessor is instead left for the implementation to read at dispatch, and
-may be read more than once, and no single-read guarantee applies to one. Other standard members are
-not forwarded, because the signed request already carries them and forwarding `headers` would
-replace the signature fields.
+and reassigning one initializer cannot change the transport of a request already in flight. Wrapper
+initializers must be object literals or null-prototype objects with own enumerable data properties.
+Inherited, non-enumerable, accessor, callable, class-based, and Proxy initializers are unsupported;
+the wrappers reject every shape they can identify before signing. Other standard members are not
+forwarded, because the signed request already carries them and forwarding `headers` would replace
+the signature fields.
 
 A signing wrapper also observes the request's `AbortSignal` while signing is still pending, so a
 slow or stalled signer does not leave `fetch()` hanging with no way to give up. When the abort wins,
