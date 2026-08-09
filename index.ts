@@ -404,7 +404,6 @@ export interface SignatureFields extends MessageSignature {
  * package builds returns a Promise.
  */
 export interface Signer {
-  readonly type: 'signer'
   /** The algorithm selected by configuration or key metadata. */
   readonly alg: string
   sign(data: Uint8Array<ArrayBuffer>): Uint8Array | Promise<Uint8Array>
@@ -421,7 +420,6 @@ export type SignerFactory = () => Readonly<Signer>
  * returns a Promise.
  */
 export interface Verifier {
-  readonly type: 'verifier'
   /** The algorithm selected by configuration or key metadata. */
   readonly alg: string
   verify(
@@ -691,7 +689,6 @@ function createWebCryptoSignerFactory(
 ): SignerFactory {
   assertAlgorithmKey(key, expected)
   return () => ({
-    type: 'signer',
     alg: expected.identifier,
     async sign(data) {
       return new Uint8Array(await globalThis.crypto.subtle.sign(operation, key, data))
@@ -713,7 +710,6 @@ function createWebCryptoVerifierFactory(
 ): SynchronousVerifierFactory {
   assertAlgorithmKey(key, expected)
   return () => ({
-    type: 'verifier',
     alg: expected.identifier,
     async verify(data, signature) {
       return globalThis.crypto.subtle.verify(operation, key, signature, data)
@@ -4629,7 +4625,6 @@ function signerFromFactory(factory: SignerFactory): Readonly<Signer> {
     if (
       signer === null ||
       typeof signer !== 'object' ||
-      signer.type !== 'signer' ||
       typeof signer.alg !== 'string' ||
       signer.alg.length === 0 ||
       typeof signer.sign !== 'function'
@@ -4663,7 +4658,6 @@ async function verifierFromFactory(
     if (
       verifier === null ||
       typeof verifier !== 'object' ||
-      verifier.type !== 'verifier' ||
       typeof verifier.alg !== 'string' ||
       verifier.alg.length === 0 ||
       typeof verifier.verify !== 'function'

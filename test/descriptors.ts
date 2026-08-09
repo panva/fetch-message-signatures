@@ -218,7 +218,6 @@ describe('plain message descriptors', () => {
       createSignature(descriptor, {
         components: ['@method', '@path', 'x-covered'],
         signer: () => ({
-          type: 'signer',
           alg: 'hmac-sha256',
           async sign() {
             descriptor.headers['x-covered'] = 'changed'
@@ -238,7 +237,6 @@ describe('plain message descriptors', () => {
       createSignature(descriptor, {
         components: ['x-covered'],
         signer: () => ({
-          type: 'signer',
           alg: 'hmac-sha256',
           async sign() {
             occurrences.splice(0, occurrences.length, 'one, two')
@@ -260,7 +258,6 @@ describe('plain message descriptors', () => {
           request,
           components: ['x-covered'],
           signer: () => ({
-            type: 'signer',
             alg: 'hmac-sha256',
             async sign() {
               request.headers['x-uncovered'] = 'changed'
@@ -283,7 +280,6 @@ describe('plain message descriptors', () => {
           request,
           components: ['x-covered'],
           signer: () => ({
-            type: 'signer',
             alg: 'hmac-sha256',
             async sign() {
               request.url = 'https://other.example/changed'
@@ -329,7 +325,6 @@ describe('plain message descriptors', () => {
         createSignature(test.message, {
           components: ['x-covered'],
           signer: () => ({
-            type: 'signer',
             alg: 'hmac-sha256',
             async sign() {
               test.mutate()

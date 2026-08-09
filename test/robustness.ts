@@ -506,7 +506,6 @@ function syncDigest(data: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 const syncSigner: SignerFactory = () => ({
-  type: 'signer',
   alg: 'sync-stub',
   sign(data) {
     return syncDigest(data)
@@ -514,7 +513,6 @@ const syncSigner: SignerFactory = () => ({
 })
 
 const syncVerifier: SynchronousVerifierFactory = () => ({
-  type: 'verifier',
   alg: 'sync-stub',
   verify(data, signature) {
     return bytesToBase64(syncDigest(data)) === bytesToBase64(signature)
@@ -568,7 +566,7 @@ describe('synchronous providers', () => {
     await assert.rejects(
       createSignature(requestFixture(), {
         ...syncSignOptions,
-        signer: () => ({ type: 'signer', alg: 'sync-stub', sign: () => 'not bytes' as never }),
+        signer: () => ({ alg: 'sync-stub', sign: () => 'not bytes' as never }),
       }),
       /Signer output must be a Uint8Array/,
     )
@@ -576,7 +574,7 @@ describe('synchronous providers', () => {
     const signed = await sign(requestFixture(), syncSignOptions)
     await assert.rejects(
       verify(signed, {
-        verifier: () => ({ type: 'verifier', alg: 'sync-stub', verify: () => 1 as never }),
+        verifier: () => ({ alg: 'sync-stub', verify: () => 1 as never }),
         policy: syncPolicy(),
       }),
       /Verifier output must be a boolean/,
@@ -616,7 +614,7 @@ describe('provider contracts and mutation resistance', () => {
     await assert.rejects(
       createSignature(requestFixture(), {
         ...signOptions(),
-        signer: () => ({ type: 'signer' }) as never,
+        signer: () => ({}) as never,
       }),
       /Invalid "signer"/,
     )
@@ -627,7 +625,6 @@ describe('provider contracts and mutation resistance', () => {
       createSignature(requestFixture(), {
         ...signOptions(),
         signer: () => ({
-          type: 'signer',
           alg: 'hmac-sha256',
           async sign() {
             throw new Error('hardware failure')
@@ -648,7 +645,6 @@ describe('provider contracts and mutation resistance', () => {
       createSignature(requestFixture(), {
         ...signOptions(),
         signer: () => ({
-          type: 'signer',
           alg: 'hmac-sha256',
           async sign() {
             return 'not bytes' as unknown as Uint8Array
@@ -679,7 +675,6 @@ describe('provider contracts and mutation resistance', () => {
       createSignature(request, {
         ...signOptions(),
         signer: () => ({
-          type: 'signer',
           alg: 'hmac-sha256',
           async sign() {
             await Promise.resolve()
@@ -701,7 +696,6 @@ describe('provider contracts and mutation resistance', () => {
         components: ['@status', component('x-covered', { req: true })],
         parameters: { created: RFC_CREATED },
         signer: () => ({
-          type: 'signer',
           alg: 'hmac-sha256',
           async sign() {
             await Promise.resolve()
@@ -743,7 +737,7 @@ describe('provider contracts and mutation resistance', () => {
     )
     await assert.rejects(
       verify(signed, {
-        verifier: (() => ({ type: 'verifier' })) as never,
+        verifier: (() => ({})) as never,
         policy: verificationPolicy(),
       }),
       /Invalid "verifier"/,
@@ -755,7 +749,6 @@ describe('provider contracts and mutation resistance', () => {
     await assert.rejects(
       verify(signed, {
         verifier: () => ({
-          type: 'verifier',
           alg: 'hmac-sha256',
           async verify() {
             throw new Error('remote HSM failure')
@@ -777,7 +770,6 @@ describe('provider contracts and mutation resistance', () => {
     await assert.rejects(
       verify(signed, {
         verifier: () => ({
-          type: 'verifier',
           alg: 'hmac-sha256',
           async verify() {
             return 1 as unknown as boolean
@@ -808,7 +800,6 @@ describe('provider contracts and mutation resistance', () => {
     await assert.rejects(
       verify(signed, {
         verifier: () => ({
-          type: 'verifier',
           alg: 'hmac-sha256',
           async verify() {
             await Promise.resolve()
@@ -846,7 +837,6 @@ describe('provider contracts and mutation resistance', () => {
         ;(signature.parameters.find(([name]) => name === 'title')![1] as { value: string }).value =
           'provider-controlled'
         return {
-          type: 'verifier',
           alg: 'hmac-sha256',
           async verify() {
             return true
@@ -895,7 +885,6 @@ describe('provider contracts and mutation resistance', () => {
       verify(response, {
         request,
         verifier: () => ({
-          type: 'verifier',
           alg: 'hmac-sha256',
           async verify() {
             await Promise.resolve()
@@ -1053,7 +1042,6 @@ describe('verification policy boundaries', () => {
     })
     const pending = verify(signed, {
       verifier: () => ({
-        type: 'verifier',
         alg: 'hmac-sha256',
         async verify() {
           verificationStarted()
@@ -1366,7 +1354,6 @@ describe('signature parsing, metadata, and multiple-signature boundaries', () =>
       verifier(signature) {
         observed = signature
         return {
-          type: 'verifier',
           alg: 'hmac-sha256',
           async verify(data, signature) {
             return (await webCryptoVerifier()(observed, { message: signed })).verify(
@@ -1388,7 +1375,6 @@ describe('signature parsing, metadata, and multiple-signature boundaries', () =>
     let signedBytes!: Uint8Array
     const fields = await createSignature(requestFixture(), {
       signer: () => ({
-        type: 'signer',
         alg: 'test',
         async sign(data) {
           signedBytes = data
@@ -2514,7 +2500,6 @@ describe('fetch wrapper resource and transport handling', () => {
     const signingFetch = createSigningFetch({
       sign: {
         signer: () => ({
-          type: 'signer',
           alg: 'test',
           sign() {
             // A stalled HSM or remote signer: never settles on its own.
@@ -2547,7 +2532,6 @@ describe('fetch wrapper resource and transport handling', () => {
         signer: () => {
           factoryCalls++
           return {
-            type: 'signer',
             alg: 'test',
             async sign() {
               signCalls++
@@ -2789,7 +2773,6 @@ describe('fetch wrapper resource and transport handling', () => {
     const signingFetch = createSigningFetch({
       sign: {
         signer: () => ({
-          type: 'signer',
           alg: 'test',
           async sign() {
             await blocked
@@ -2836,7 +2819,6 @@ describe('fetch wrapper resource and transport handling', () => {
       const signingFetch = createSigningFetch({
         sign: {
           signer: () => ({
-            type: 'signer',
             alg: 'test',
             async sign() {
               await blocked
@@ -2999,7 +2981,6 @@ describe('fetch wrapper resource and transport handling', () => {
 
       const verify: VerifyOptions = {
         verifier: () => ({
-          type: 'verifier',
           alg: 'test',
           verify() {
             verifierCalls++
@@ -3077,7 +3058,6 @@ describe('fetch wrapper resource and transport handling', () => {
 
       const verify: VerifyOptions = {
         verifier: () => ({
-          type: 'verifier',
           alg: 'test',
           async verify() {
             const reader = response.body!.getReader()
@@ -3138,7 +3118,7 @@ describe('fetch wrapper resource and transport handling', () => {
       sign: {
         signer: () => {
           controller.abort(new Error('aborted during setup'))
-          return { type: 'signer', alg: 'test', sign: () => new Promise<Uint8Array>(() => {}) }
+          return { alg: 'test', sign: () => new Promise<Uint8Array>(() => {}) }
         },
         components: ['@method'],
         parameters: { created: RFC_CREATED },
@@ -3181,7 +3161,6 @@ describe('fetch wrapper resource and transport handling', () => {
     const verifyingFetch = createVerifyingFetch({
       verify: {
         verifier: () => ({
-          type: 'verifier',
           alg: 'test',
           async verify(_data, _signature) {
             return false

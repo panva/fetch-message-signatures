@@ -12,7 +12,6 @@ returns a Promise.
   - [verify()](#verify)
 - [Properties](#properties)
   - [alg](#alg)
-  - [type](#type)
 
 ## Methods
 
@@ -38,9 +37,3 @@ returns a Promise.
 > `readonly` **alg**: `string`
 
 The algorithm selected by configuration or key metadata.
-
-***
-
-### type
-
-> `readonly` **type**: `"verifier"`

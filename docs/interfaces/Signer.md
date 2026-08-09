@@ -12,7 +12,6 @@ package builds returns a Promise.
   - [sign()](#sign)
 - [Properties](#properties)
   - [alg](#alg)
-  - [type](#type)
 
 ## Methods
 
@@ -37,9 +36,3 @@ package builds returns a Promise.
 > `readonly` **alg**: `string`
 
 The algorithm selected by configuration or key metadata.
-
-***
-
-### type
-
-> `readonly` **type**: `"signer"`

@@ -133,14 +133,12 @@ const hmacKey = await crypto.subtle.importKey(
   ['sign', 'verify'],
 )
 const hmacVerifier: VerifierFactory = () => ({
-  type: 'verifier',
   alg: 'hmac-sha256',
   async verify(data, signature) {
     return crypto.subtle.verify('HMAC', hmacKey, signature, data)
   },
 })
 const hmacSigner: SignerFactory = () => ({
-  type: 'signer',
   alg: 'hmac-sha256',
   async sign(data) {
     return new Uint8Array(await crypto.subtle.sign('HMAC', hmacKey, data))

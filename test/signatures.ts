@@ -302,7 +302,7 @@ describe('synchronous signature field serialization', () => {
 
   it('produces exactly what createSignature produces for the same inputs', async () => {
     const oneStep = await createSignature(message(), {
-      signer: () => ({ type: 'signer', alg: 'test', sign: () => bytes }),
+      signer: () => ({ alg: 'test', sign: () => bytes }),
       components,
       parameters,
       label: 'sig9',
@@ -342,7 +342,6 @@ describe('synchronous signature field serialization', () => {
 
     const verified = await verify(signed, {
       verifier: () => ({
-        type: 'verifier',
         alg: 'test',
         verify: (data, signature) => bytesToBase64(digest(data)) === bytesToBase64(signature),
       }),
@@ -366,7 +365,7 @@ describe('synchronous signature field serialization', () => {
   it('adds no default created, unlike createSignature', async () => {
     const composed = createSignatureFields({ signature: bytes, components: ['@method'] })
     const oneStep = await createSignature(message(), {
-      signer: () => ({ type: 'signer', alg: 'test', sign: () => bytes }),
+      signer: () => ({ alg: 'test', sign: () => bytes }),
       components: ['@method'],
     })
 
@@ -1095,7 +1094,6 @@ describe('verification policy and timestamps', () => {
           assert.equal(context.message, signed)
           assert.equal(context.request, undefined)
           return {
-            type: 'verifier',
             alg: 'hmac-sha256',
             async verify() {
               verifiedCryptographically = true
@@ -1127,7 +1125,6 @@ describe('verification policy and timestamps', () => {
       verify(signed, {
         verifier() {
           return {
-            type: 'verifier',
             alg: 'hmac-sha256',
             async verify() {
               return false
@@ -1201,7 +1198,6 @@ describe('verification policy and timestamps', () => {
         verifier() {
           resolverCalled = true
           return {
-            type: 'verifier',
             alg: 'hmac-sha256',
             async verify() {
               return true
@@ -1221,7 +1217,6 @@ describe('signer output ownership', () => {
     let output!: Uint8Array
     const fields = await createSignature(rfcRequest(), {
       signer: () => ({
-        type: 'signer',
         alg: 'test',
         async sign() {
           output = new Uint8Array([1, 2, 3])

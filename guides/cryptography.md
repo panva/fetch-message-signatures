@@ -139,7 +139,6 @@ declare function signSynchronously(data: Uint8Array): Uint8Array
 declare function verifySynchronously(data: Uint8Array, signature: Uint8Array): boolean
 
 const signer: FetchSig.SignerFactory = () => ({
-  type: 'signer',
   alg: 'ed25519',
   sign(data) {
     return signSynchronously(data)
@@ -147,7 +146,6 @@ const signer: FetchSig.SignerFactory = () => ({
 })
 
 const verifier: FetchSig.VerifierFactory = () => ({
-  type: 'verifier',
   alg: 'ed25519',
   verify(data, signature) {
     return verifySynchronously(data, signature)

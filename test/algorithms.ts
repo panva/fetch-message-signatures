@@ -212,9 +212,7 @@ describe('Web Cryptography algorithm helpers', () => {
       const signer = signerFactory()
       const verifier = verifierFactory(providerSignature, providerContext)
 
-      assert.equal(signer.type, 'signer')
       assert.equal(signer.alg, algorithm.identifier)
-      assert.equal(verifier.type, 'verifier')
       assert.equal(verifier.alg, algorithm.identifier)
 
       const signature = await signer.sign(message)

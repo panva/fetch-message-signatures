@@ -179,7 +179,6 @@ export function webCryptoSigner(
 ): SignerFactory {
   const hmac = webCryptoHmac(secret)
   return () => ({
-    type: 'signer',
     alg,
     async sign(data) {
       return hmac.sign(data)
@@ -196,7 +195,6 @@ export function webCryptoVerifier(
   return (signature) => {
     assertExpectedKey(signature, expectedKeyId)
     return {
-      type: 'verifier',
       alg,
       async verify(data, value) {
         return hmac.verify(data, value)

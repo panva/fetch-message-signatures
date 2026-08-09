@@ -28,7 +28,6 @@ let privateKey!: CryptoKey
 let publicKey!: CryptoKey
 
 const signer: SignerFactory = () => ({
-  type: 'signer',
   alg: 'ed25519',
   async sign(data) {
     return new Uint8Array(await crypto.subtle.sign('Ed25519', privateKey, data))
@@ -36,7 +35,6 @@ const signer: SignerFactory = () => ({
 })
 
 const verifier: VerifierFactory = () => ({
-  type: 'verifier',
   alg: 'ed25519',
   async verify(data, signature) {
     return crypto.subtle.verify('Ed25519', publicKey, signature, data)
@@ -45,7 +43,6 @@ const verifier: VerifierFactory = () => ({
 
 // A provider backed by a synchronous library needs no Promise wrapper.
 const synchronousSigner: SignerFactory = () => ({
-  type: 'signer',
   alg: 'ed25519',
   sign(data) {
     return signSynchronously(data)
@@ -53,7 +50,6 @@ const synchronousSigner: SignerFactory = () => ({
 })
 
 const synchronousVerifier: VerifierFactory = () => ({
-  type: 'verifier',
   alg: 'ed25519',
   verify(data, signature) {
     return verifySynchronously(data, signature)

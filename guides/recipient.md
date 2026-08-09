@@ -34,7 +34,6 @@ const verifier: FetchSig.VerifierFactory = (signature, context) => {
   }
 
   return {
-    type: 'verifier',
     alg: 'ed25519',
     async verify(data, signatureBytes) {
       return crypto.subtle.verify('Ed25519', key, signatureBytes, data)
