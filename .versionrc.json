@@ -1,7 +1,7 @@
 {
   "commit-all": true,
   "scripts": {
-    "prerelease": "node --run format && node --run docs && git diff --exit-code && node --run test && node --run build",
+    "prerelease": "node --run format && node --run docs && git diff --exit-code && node --run test && node --run test:dist",
     "postbump": "git add index.js index.d.ts index.d.ts.map -f",
     "postchangelog": "node ./tools/postchangelog.cjs"
   },

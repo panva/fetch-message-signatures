@@ -46,13 +46,17 @@ The published surface is checked separately:
 node --run typecheck:dist
 node --run check:packaging
 node --run check:bundles
+node --run test:dist
 ```
 
 `typecheck:dist` type-checks the emitted `index.d.ts` on its own, under the module resolution modes
 and lib configurations consumers use, and pins the ambient globals it depends on. `check:packaging`
 runs publint and `@arethetypeswrong/cli` over a packed tarball. `check:bundles` enforces that the
 sender, recipient, and `Accept-Signature` APIs stay out of each other's bundles, and reports what
-each entry point costs a consumer.
+each entry point costs a consumer. `test:dist` checks the exact tarball contents, installs and
+imports it with no development dependencies, and runs the Node.js suite against the emitted
+`index.js`. The release workflow also runs its isolation checks against the already-packed tarball
+before staging that same file.
 
 Documentation examples are compiled as part of their check. It requires `pandoc` and `jq`:
 

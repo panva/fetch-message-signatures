@@ -1,5 +1,5 @@
 // Normalizes the release headings that commit-and-tag-version writes into CHANGELOG.md, so that
-// every release is an h2 and tools/release-notes.cjs can find any of them the same way.
+// every release is an h2 and the shared release workflow can find any of them the same way.
 //
 // Three shapes need fixing:
 //

@@ -44,7 +44,8 @@ jobs:
           cache: 'npm'
           check-latest: true
       - run: npm clean-install
-      - run: node --run build
+      - name: Packed artifact contents and runtime
+        run: node --run test:dist
       - name: Type check the emitted declarations
         run: node --run typecheck:dist
       - name: Packaging metadata and type resolution
