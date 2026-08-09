@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.0](https://github.com/panva/fetch-message-signatures/compare/v0.0.7...v0.1.0) (2026-08-09)
+
+### ⚠ BREAKING CHANGES
+
+* remove provider discriminators
+* replace field adapters with message snapshots
+* require ordinary configuration records
+
+### Features
+
+* accept a plain object as the message ([ea1252e](https://github.com/panva/fetch-message-signatures/commit/ea1252efcca39a4cabf46e34bb58ea61f399ee07))
+* add stable verification error codes ([b036fdb](https://github.com/panva/fetch-message-signatures/commit/b036fdb0ddf9635abcf33b595cf4740bb7566ceb))
+
+### Refactor
+
+* remove provider discriminators ([cd7dd6b](https://github.com/panva/fetch-message-signatures/commit/cd7dd6b857845ee26905323c0321962a1feb4af0))
+* replace field adapters with message snapshots ([5d1752b](https://github.com/panva/fetch-message-signatures/commit/5d1752bebc6c21b967e0835ce507dd03d162494d))
+* require ordinary configuration records ([414a88b](https://github.com/panva/fetch-message-signatures/commit/414a88b311ce07e478539cd59cdeea4d01205195))
+
 ## [0.0.7](https://github.com/panva/fetch-message-signatures/compare/v0.0.6...v0.0.7) (2026-08-08)
 
 ### Refactor
