@@ -24,8 +24,10 @@ const verifier: FetchSig.VerifierFactory = (signature, context) => {
     throw new Error('Unknown signing key')
   }
 
+  // `instanceof` would miss a message supplied as a plain object, so the request is recognised by
+  // the property only a request-shaped message has.
   if (
-    context.message instanceof Request &&
+    'method' in context.message &&
     new URL(context.message.url).origin !== 'https://api.example'
   ) {
     throw new Error('Key is not authorized for this origin')
@@ -75,7 +77,7 @@ const verified = await FetchSig.verify(request, {
   },
 })
 
-declare function claimNonceOnce(nonce: string, message: Request | Response): Promise<void>
+declare function claimNonceOnce(nonce: string, message: FetchSig.NormalizedMessage): Promise<void>
 
 console.log(verified.algorithm)
 ```

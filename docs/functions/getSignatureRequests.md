@@ -2,8 +2,8 @@
 
 > **getSignatureRequests**(`message`): readonly [`SignatureRequest`](../interfaces/SignatureRequest.md)\[]
 
-Parses every signature request carried by a Fetch message and checks that each requested
-component applies to the message that would be signed.
+Parses every signature request carried by a message and checks that each requested component
+applies to the message that would be signed.
 
 The target message is the other direction: `Accept-Signature` on a request asks for a signature
 on the response, and on a response it asks for a signature on the client's next request. Returns
@@ -13,7 +13,7 @@ an empty array when the message carries no `Accept-Signature` field.
 
 | Parameter | Type |
 | :------ | :------ |
-| `message` | `Request` ∣ `Response` |
+| `message` | [`SignableRequest`](../type-aliases/SignableRequest.md) ∣ [`SignableResponse`](../type-aliases/SignableResponse.md) |
 
 ## Returns
 

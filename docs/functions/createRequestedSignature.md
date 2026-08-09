@@ -2,7 +2,7 @@
 
 > **createRequestedSignature**(`message`, `request`, `options`): `Promise`<[`SignatureFields`](../interfaces/SignatureFields.md)>
 
-Fulfills one parsed `Accept-Signature` request without modifying the target Fetch message.
+Fulfills one parsed `Accept-Signature` request without modifying the target message.
 
 Signs exactly the requested label and covered components, and processes every requested signature
 metadata parameter: a requested `created` defaults to the signing clock, a requested `expires` or
@@ -13,7 +13,7 @@ be supplied here with the same value. Additional parameters may be supplied and 
 
 | Parameter | Type |
 | :------ | :------ |
-| `message` | `Request` ∣ `Response` |
+| `message` | [`SignableRequest`](../type-aliases/SignableRequest.md) ∣ [`SignableResponse`](../type-aliases/SignableResponse.md) |
 | `request` | [`SignatureRequest`](../interfaces/SignatureRequest.md) |
 | `options` | [`RequestedSignOptions`](../interfaces/RequestedSignOptions.md) |
 

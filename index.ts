@@ -293,8 +293,9 @@ export interface FieldValueContext {
  * Supplies individual HTTP field occurrences in wire order.
  *
  * Fetch combines most repeated field lines and does not expose trailers. Provide this adapter when
- * using the `bs` or `tr` component parameters, or when an application has a more authoritative
- * representation of the HTTP message than `Headers`.
+ * using the `tr` component parameter, when using `bs` with a `Headers` that does not expose the
+ * occurrences, or when an application has a more authoritative representation of the HTTP message.
+ * A descriptor record whose value is an array already retains the occurrences needed by `bs`.
  *
  * If a field name occurs in both the header and trailer sections, return only the section selected
  * by `context.trailers`. RFC 9421 forbids combining same-name header and trailer values for
@@ -303,7 +304,7 @@ export interface FieldValueContext {
  * Returning `undefined` or an empty array indicates that the field is absent.
  */
 export type FieldValues = (
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   name: string,
   context: FieldValueContext,
 ) => ReadonlyArray<string> | undefined
@@ -311,7 +312,7 @@ export type FieldValues = (
 /** Options shared by signature-base creation, signing, and verification. */
 export interface SignatureContext {
   /** The exact request that triggered a response. Required when a response signature uses `;req`. */
-  readonly request?: Request
+  readonly request?: SignableRequest
   /** Structured Field top-level types, indexed by lowercase HTTP field name. */
   readonly structuredFields?: Readonly<Record<string, StructuredFieldType>>
   /** Adapter for raw field occurrences and trailers. */
@@ -320,10 +321,17 @@ export interface SignatureContext {
 
 /** Target-message context supplied to a verifier factory. */
 export interface VerificationContext {
-  /** The target message carrying the signature. */
-  readonly message: Request | Response
-  /** The exact related request, when response/request binding is in use. */
-  readonly request?: Request
+  /**
+   * The target message carrying the signature.
+   *
+   * Its fields are always a `Headers`, whatever shape was passed to {@link verify}, so a callback
+   * can read them without normalizing first. Record occurrences are converted using the host
+   * `Headers` semantics for application processing; RFC 9421's signature-base combination is a
+   * separate representation and can differ for non-list fields.
+   */
+  readonly message: NormalizedMessage
+  /** The normalized related request, when response/request binding is in use. */
+  readonly request?: NormalizedRequest
 }
 
 /** Authenticated context supplied to additional application policy. */
@@ -331,6 +339,46 @@ export interface VerifiedSignatureContext extends VerificationContext {
   /** The algorithm selected by the verifier factory. */
   readonly algorithm: string
 }
+
+/**
+ * HTTP fields supplied to a reading operation.
+ *
+ * A Fetch `Headers` is used as it is. A plain record is what a server framework typically hands a
+ * handler, so its own field object can be passed straight through. An array value is one field with
+ * repeated occurrences, which RFC 9421 combines rather than concatenating with a bare comma.
+ */
+export type HeadersInput =
+  Headers | Readonly<Record<string, string | ReadonlyArray<string> | undefined>>
+
+/**
+ * A request this package can read components from.
+ *
+ * A Fetch `Request` is the expected input, and is what the Fetch wrappers, {@link sign},
+ * {@link appendSignature}, {@link signRequested}, and {@link appendAcceptSignature} require. The
+ * second member exists for a server that never constructs one and holds only the values it read off
+ * an incoming request. Such a caller uses {@link createSignature} and attaches the returned field
+ * values itself.
+ */
+export type SignableRequest =
+  Request | { readonly method: string; readonly url: string; readonly headers: HeadersInput }
+
+/**
+ * A response this package can read components from.
+ *
+ * A Fetch `Response` is the expected input. See {@link SignableRequest} for when the second member
+ * is useful.
+ */
+export type SignableResponse =
+  Response | { readonly status: number; readonly headers: HeadersInput }
+
+/**
+ * A {@link SignableRequest} or {@link SignableResponse} whose fields use the host's `Headers`
+ * representation. This is an application-processing view, not an occurrence-preserving view.
+ */
+export type NormalizedMessage = (SignableRequest | SignableResponse) & { readonly headers: Headers }
+
+/** A {@link SignableRequest} whose fields use the host's `Headers` representation. */
+export type NormalizedRequest = SignableRequest & { readonly headers: Headers }
 
 /** A parsed HTTP message signature. */
 export interface MessageSignature {
@@ -1120,11 +1168,11 @@ export function rsaV1_5Sha256Verifier(key: CryptoKey): SynchronousVerifierFactor
 }
 
 /**
- * Reports whether a Fetch message is a `Request` rather than a `Response`.
+ * Reports whether a signable message is a request rather than a response.
  *
  * Only requests carry a method, and Fetch exposes it as a string.
  */
-function isRequest(message: Request | Response): message is Request {
+function isRequest(message: SignableRequest | SignableResponse): message is SignableRequest {
   return typeof (message as Request).method === 'string'
 }
 
@@ -1144,6 +1192,66 @@ function isHeaders(value: unknown): value is Headers {
     typeof (value as Headers).has === 'function' &&
     typeof (value as Headers).set === 'function'
   )
+}
+
+/**
+ * Normalizes supplied HTTP fields into a `Headers`.
+ *
+ * A `Headers` is returned as it is. A record is appended one value at a time rather than handed to
+ * the `Headers` constructor, so the host applies its normal field-processing semantics and retains
+ * separate `Set-Cookie` values where it supports them. Signature-base generation reads descriptor
+ * occurrences separately and applies RFC 9421's combination rules instead.
+ */
+function toHeaders(input: HeadersInput): Headers {
+  if (isHeaders(input)) {
+    return input
+  }
+  const headers = new Headers()
+  for (const [name, value] of Object.entries(input)) {
+    if (value === undefined) {
+      continue
+    }
+    if (Array.isArray(value)) {
+      for (const occurrence of value) {
+        headers.append(name, occurrence)
+      }
+    } else {
+      headers.append(name, value as string)
+    }
+  }
+  return headers
+}
+
+/**
+ * Returns a normalized message view for verification callbacks and field parsing.
+ *
+ * A message that already carries a `Headers` is returned unchanged, which keeps the Fetch path free
+ * of an allocation and preserves its identity for callback contexts.
+ */
+function normalizeMessage<T extends SignableRequest | SignableResponse>(
+  message: T,
+): T & { readonly headers: Headers } {
+  if (isHeaders(message.headers)) {
+    return message as T & { readonly headers: Headers }
+  }
+  const headers = toHeaders(message.headers)
+  if (isRequest(message)) {
+    return { method: message.method, url: message.url, headers } as unknown as T & {
+      readonly headers: Headers
+    }
+  }
+  return { status: message.status, headers } as unknown as T & { readonly headers: Headers }
+}
+
+/** Creates an isolated, normalized view for one verification callback. */
+function normalizeVerificationContext(
+  message: SignableRequest | SignableResponse,
+  request: SignableRequest | undefined,
+): VerificationContext {
+  return {
+    message: normalizeMessage(message),
+    request: request === undefined ? undefined : normalizeMessage(request),
+  }
 }
 
 /**
@@ -1184,30 +1292,32 @@ function isUint8Array(value: unknown): value is Uint8Array {
 }
 
 /**
- * Rejects a value that is not usable as a Fetch `Request` or `Response`.
+ * Rejects a value that is not usable as a {@link SignableRequest} or {@link SignableResponse}.
  *
  * Structural rather than instance-based, so that messages from a runtime's own Fetch
- * implementation, a test double, or a transport integration are all accepted.
+ * implementation, a test double, a transport integration, or a plain descriptor built by a server
+ * that never constructs a `Request` are all accepted.
  */
-function assertMessage(message: unknown): asserts message is Request | Response {
-  const candidate = message as Request | Response | null
+function assertMessage(message: unknown): asserts message is SignableRequest | SignableResponse {
+  const candidate = message as (Request | Response) | null
   if (
     candidate === null ||
     typeof candidate !== 'object' ||
-    typeof candidate.headers?.get !== 'function'
+    candidate.headers === null ||
+    typeof candidate.headers !== 'object'
   ) {
-    fail('"message" must be a Request or Response')
+    fail('"message" must be a Request, Response, or plain message descriptor')
   }
   if (isRequest(candidate)) {
     // Every request-targeted derived component is read from the target URI, so a request without a
     // usable "url" is rejected here instead of failing later with a less specific error.
     if (typeof candidate.url !== 'string') {
-      fail('"message" must be a Request or Response')
+      fail('"message" must be a Request, Response, or plain message descriptor')
     }
     return
   }
   if (typeof (candidate as Response).status !== 'number') {
-    fail('"message" must be a Request or Response')
+    fail('"message" must be a Request, Response, or plain message descriptor')
   }
 }
 
@@ -1254,35 +1364,136 @@ function cloneBytes(value: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 interface MessageMutationGuard {
-  readonly message: Request | Response
-  readonly headers: Headers
-  readonly request?: Request
-  readonly requestHeaders?: Headers
+  readonly message: SignableRequest | SignableResponse
+  readonly properties: MessagePropertiesSnapshot
+  readonly headers: HeadersSnapshot
+  readonly request?: SignableRequest
+  readonly requestProperties?: RequestPropertiesSnapshot
+  readonly requestHeaders?: HeadersSnapshot
+}
+
+interface RequestPropertiesSnapshot {
+  readonly kind: 'request'
+  readonly method: string
+  readonly url: string
+}
+
+interface ResponsePropertiesSnapshot {
+  readonly kind: 'response'
+  readonly status: number
+}
+
+type MessagePropertiesSnapshot = RequestPropertiesSnapshot | ResponsePropertiesSnapshot
+
+/** Snapshots the descriptor properties that identify and route a message. */
+function snapshotMessageProperties(
+  message: SignableRequest | SignableResponse,
+): MessagePropertiesSnapshot {
+  return isRequest(message)
+    ? { kind: 'request', method: message.method, url: message.url }
+    : { kind: 'response', status: message.status }
+}
+
+/** Reports whether a message still has the same kind and routing properties. */
+function messagePropertiesMatch(
+  snapshot: MessagePropertiesSnapshot,
+  message: SignableRequest | SignableResponse,
+): boolean {
+  if (snapshot.kind === 'request') {
+    return isRequest(message) && message.method === snapshot.method && message.url === snapshot.url
+  }
+  return !isRequest(message) && Object.is(message.status, snapshot.status)
+}
+
+interface HeadersSnapshot {
+  /** Fetch-normalized fields, used for the existing Headers comparison semantics. */
+  readonly normalized: Headers
+  /** Exact record occurrences, retained because a Headers cannot represent their boundaries. */
+  readonly record?: ReadonlyArray<
+    readonly [name: string, value: string | ReadonlyArray<string> | undefined]
+  >
+}
+
+/** Snapshots fields without retaining any mutable record value arrays. */
+function snapshotHeaders(input: HeadersInput): HeadersSnapshot {
+  if (isHeaders(input)) {
+    return { normalized: new Headers(input) }
+  }
+  return {
+    normalized: toHeaders(input),
+    record: Object.entries(input).map(([name, value]) => [
+      name,
+      Array.isArray(value) ? [...value] : value,
+    ]),
+  }
+}
+
+/** Reports whether a header input still has the values and occurrence boundaries in a snapshot. */
+function headersMatchSnapshot(snapshot: HeadersSnapshot, input: HeadersInput): boolean {
+  if (!headersEqual(snapshot.normalized, toHeaders(input))) {
+    return false
+  }
+  if (snapshot.record === undefined) {
+    return isHeaders(input)
+  }
+  if (isHeaders(input)) {
+    return false
+  }
+  const entries = Object.entries(input)
+  return (
+    entries.length === snapshot.record.length &&
+    entries.every(([name, value], index) => {
+      const expected = snapshot.record![index]
+      if (expected?.[0] !== name) {
+        return false
+      }
+      const expectedValue = expected[1]
+      if (Array.isArray(expectedValue)) {
+        return (
+          Array.isArray(value) &&
+          value.length === expectedValue.length &&
+          value.every((occurrence, occurrenceIndex) =>
+            Object.is(occurrence, expectedValue[occurrenceIndex]),
+          )
+        )
+      }
+      return !Array.isArray(value) && Object.is(value, expectedValue)
+    })
+  )
 }
 
 /**
- * Snapshots the observable headers of the target message, and of the related request when one is
- * supplied, before an asynchronous signing or verification operation begins.
+ * Snapshots the observable kind, routing properties, and headers of the target message, and of the
+ * related request when one is supplied, before an asynchronous operation begins.
  *
  * Signing and verification call out to application-provided signers, verifiers, field adapters, and
  * policy callbacks. The snapshot lets those operations detect a message that changed while they
  * were suspended, which would otherwise produce a signature over a message that was never sent.
  */
 function createMessageMutationGuard(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   context: SignatureContext,
 ): MessageMutationGuard {
-  let request: Request | undefined
-  let requestHeaders: Headers | undefined
+  let request: SignableRequest | undefined
+  let requestProperties: RequestPropertiesSnapshot | undefined
+  let requestHeaders: HeadersSnapshot | undefined
   if (context.request !== undefined) {
     assertMessage(context.request)
     if (!isRequest(context.request)) {
       fail('"request" must be the related Request')
     }
     request = context.request
-    requestHeaders = new Headers(request.headers)
+    requestProperties = { kind: 'request', method: request.method, url: request.url }
+    requestHeaders = snapshotHeaders(request.headers)
   }
-  return { message, headers: new Headers(message.headers), request, requestHeaders }
+  return {
+    message,
+    properties: snapshotMessageProperties(message),
+    headers: snapshotHeaders(message.headers),
+    request,
+    requestProperties,
+    requestHeaders,
+  }
 }
 
 /** Reports whether two `Headers` objects expose the same field names and values in the same order. */
@@ -1299,16 +1510,24 @@ function headersEqual(left: Headers, right: Headers): boolean {
 }
 
 /**
- * Rejects an operation whose target message, or related request, had its headers changed since the
- * guard was created.
+ * Rejects an operation whose target message, or related request, changed since the guard was
+ * created.
  */
 function assertMessageUnchanged(
   guard: MessageMutationGuard,
   operation: 'signing' | 'verification',
 ): void {
   if (
-    !headersEqual(guard.headers, guard.message.headers) ||
-    (guard.request !== undefined && !headersEqual(guard.requestHeaders!, guard.request.headers))
+    !messagePropertiesMatch(guard.properties, guard.message) ||
+    (guard.request !== undefined &&
+      !messagePropertiesMatch(guard.requestProperties!, guard.request))
+  ) {
+    throw new Error(`HTTP message context changed during signature ${operation}`)
+  }
+  if (
+    !headersMatchSnapshot(guard.headers, guard.message.headers) ||
+    (guard.request !== undefined &&
+      !headersMatchSnapshot(guard.requestHeaders!, guard.request.headers))
   ) {
     throw new Error(`HTTP message headers changed during signature ${operation}`)
   }
@@ -3113,10 +3332,10 @@ function validateComponentForTarget(identifier: MessageComponent, request: boole
   }
 }
 
-/** Enforces {@link validateComponentForTarget} against the type of an actual Fetch message. */
+/** Enforces {@link validateComponentForTarget} against the type of an actual message. */
 function validateComponentForMessage(
   identifier: MessageComponent,
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
 ): void {
   validateComponentForTarget(identifier, isRequest(message))
 }
@@ -3239,7 +3458,7 @@ function unixTimestamp(input: number | Date | undefined): number {
  * Fetch keeps the fragment in `Request.url`, but RFC 9421 derives `@target-uri`, `@request-
  * target`, `@query`, and `@query-param` from the target URI, which has none.
  */
-function getTargetUri(request: Request): string {
+function getTargetUri(request: SignableRequest): string {
   const hash = request.url.indexOf('#')
   const value = hash === -1 ? request.url : request.url.slice(0, hash)
   if (!ASCII.test(value)) {
@@ -3290,7 +3509,7 @@ interface TargetUriDerivation {
 }
 
 /** Memoized target URI derivations for the requests read while building one signature base. */
-type TargetUriDerivations = Map<Request, TargetUriDerivation>
+type TargetUriDerivations = Map<SignableRequest, TargetUriDerivation>
 
 /**
  * One HTTP field as read while building a signature base, with the derived forms it can be asked
@@ -3316,17 +3535,60 @@ interface FieldDerivation {
  * Memoized field derivations while building one signature base, indexed by the message they were
  * read from and then by section and field name.
  */
-type FieldDerivations = Map<Request | Response, Map<string, FieldDerivation>>
+type FieldDerivations = Map<SignableRequest | SignableResponse, Map<string, FieldDerivation>>
+
+/** Record-backed field occurrences, indexed once per source message and signature-base build. */
+type HeaderOccurrences = Map<string, string[]>
 
 /** Everything memoized for the duration of a single signature base build. */
 interface BaseDerivations {
   readonly targetUris: TargetUriDerivations
   readonly fields: FieldDerivations
+  readonly headerOccurrences: Map<SignableRequest | SignableResponse, HeaderOccurrences>
 }
 
 /** Creates the memo for one signature base build. */
 function createBaseDerivations(): BaseDerivations {
-  return { targetUris: new Map(), fields: new Map() }
+  return { targetUris: new Map(), fields: new Map(), headerOccurrences: new Map() }
+}
+
+/**
+ * Indexes a descriptor's field record once while retaining every occurrence in insertion order.
+ *
+ * A `Headers` is populated alongside the index only to apply its field-name and value validation.
+ * Its combined values are deliberately ignored: Fetch implementations special-case fields such as
+ * `Cookie`, while RFC 9421 always combines supplied occurrences with `", "`, and a `Headers` cannot
+ * retain the boundaries needed by `;bs`.
+ */
+function descriptorHeaderOccurrences(
+  message: SignableRequest | SignableResponse,
+  derivations: BaseDerivations,
+): HeaderOccurrences {
+  let indexed = derivations.headerOccurrences.get(message)
+  if (indexed !== undefined) {
+    return indexed
+  }
+
+  indexed = new Map()
+  const validation = new Headers()
+  for (const [inputName, inputValue] of Object.entries(message.headers)) {
+    if (inputValue === undefined) {
+      continue
+    }
+    const occurrences = Array.isArray(inputValue) ? inputValue : [inputValue]
+    for (const occurrence of occurrences) {
+      validation.append(inputName, occurrence)
+      const name = inputName.toLowerCase()
+      const values = indexed.get(name)
+      if (values === undefined) {
+        indexed.set(name, [occurrence])
+      } else {
+        values.push(occurrence)
+      }
+    }
+  }
+  derivations.headerOccurrences.set(message, indexed)
+  return indexed
 }
 
 /**
@@ -3337,7 +3599,7 @@ function createBaseDerivations(): BaseDerivations {
  * asynchronous operation.
  */
 function deriveField(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   name: string,
   trailers: boolean,
   relatedRequest: boolean,
@@ -3353,7 +3615,7 @@ function deriveField(
   const key = `${trailers ? 'trailer' : 'header'} ${name}`
   let derived = byName.get(key)
   if (derived === undefined) {
-    const values = collectFieldValues(message, name, trailers, relatedRequest, options)
+    const values = collectFieldValues(message, name, trailers, relatedRequest, options, derivations)
     derived = { values, combined: values.join(', ') }
     byName.set(key, derived)
   }
@@ -3361,7 +3623,10 @@ function deriveField(
 }
 
 /** Returns the memoized target URI derivation for a request, computing it on first use. */
-function deriveTargetUri(request: Request, derivations: TargetUriDerivations): TargetUriDerivation {
+function deriveTargetUri(
+  request: SignableRequest,
+  derivations: TargetUriDerivations,
+): TargetUriDerivation {
   let derived = derivations.get(request)
   if (derived === undefined) {
     const target = getTargetUri(request)
@@ -3435,7 +3700,7 @@ function deriveQueryParameter(derived: TargetUriDerivation, encodedName: string)
 function deriveRequestComponentValue(
   identifier: MessageComponent,
   parameters: ReadonlyMap<string, ComponentParameterValue>,
-  request: Request,
+  request: SignableRequest,
   derivations: BaseDerivations,
 ): string {
   const derived = deriveTargetUri(request, derivations.targetUris)
@@ -3558,32 +3823,38 @@ function assertBaseValue(value: string, name: string): void {
 }
 
 /**
- * Reads a field's occurrences from a Fetch message without an application adapter.
+ * Reads a field's occurrences from a message without an application adapter.
  *
- * Fetch combines repeated field lines into one value, so this returns at most one entry, except for
- * `set-cookie` in runtimes that expose `Headers.getSetCookie()`. That exception is reachable on the
- * server-side runtimes only: browsers strip `set-cookie` from requests and hide it on responses, so
- * there the field looks absent whichever way it is read. Trailers are never exposed by Fetch, so
- * they require the `fieldValues` option.
+ * A descriptor record retains every supplied occurrence. Fetch combines repeated field lines into
+ * one value, so a `Headers` returns at most one entry, except for `set-cookie` in runtimes that
+ * expose `Headers.getSetCookie()`. That exception is reachable on the server-side runtimes only:
+ * browsers strip `set-cookie` from requests and hide it on responses, so there the field looks
+ * absent whichever way it is read. Trailers are never exposed by either shape, so they require the
+ * `fieldValues` option.
  */
 function fieldValuesFromHeaders(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   name: string,
   trailers: boolean,
+  derivations: BaseDerivations,
 ): ReadonlyArray<string> | undefined {
   if (trailers) {
-    fail(`Trailer field "${name}" is not exposed by Fetch; provide the "fieldValues" option`)
+    fail(`Trailer field "${name}" is not exposed by the message; provide the "fieldValues" option`)
   }
-  if (!message.headers.has(name)) {
+  if (!isHeaders(message.headers)) {
+    return descriptorHeaderOccurrences(message, derivations).get(name)
+  }
+  const headers = message.headers
+  if (!headers.has(name)) {
     return undefined
   }
   if (name === 'set-cookie') {
-    const headers = message.headers as Headers & { getSetCookie?: () => string[] }
-    if (typeof headers.getSetCookie === 'function') {
-      return headers.getSetCookie()
+    const withSetCookie = headers as Headers & { getSetCookie?: () => string[] }
+    if (typeof withSetCookie.getSetCookie === 'function') {
+      return withSetCookie.getSetCookie()
     }
   }
-  return [message.headers.get(name)!]
+  return [headers.get(name)!]
 }
 
 /**
@@ -3593,15 +3864,16 @@ function fieldValuesFromHeaders(
  * An absent field fails signature base generation, as RFC 9421 requires.
  */
 function collectFieldValues(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   name: string,
   trailers: boolean,
   relatedRequest: boolean,
   options: SignatureContext,
+  derivations: BaseDerivations,
 ): string[] {
   const values =
     options.fieldValues === undefined
-      ? fieldValuesFromHeaders(message, name, trailers)
+      ? fieldValuesFromHeaders(message, name, trailers, derivations)
       : options.fieldValues(message, name, { trailers, relatedRequest })
   if (values !== undefined && !Array.isArray(values)) {
     fail('"fieldValues" must return an array of strings or undefined')
@@ -3681,7 +3953,7 @@ function resolveStructuredFieldType(
  */
 function deriveFieldComponentValue(
   identifier: MessageComponent,
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   relatedRequest: boolean,
   options: SignatureContext,
   derivations: BaseDerivations,
@@ -3692,10 +3964,11 @@ function deriveFieldComponentValue(
   const trailers = readComponentFlag(parameters, 'tr')
   const key = parameters.get('key')
 
-  const fetchExposesOccurrences =
-    identifier.name === 'set-cookie' &&
-    typeof (message.headers as Headers & { getSetCookie?: unknown }).getSetCookie === 'function'
-  if (bs && options.fieldValues === undefined && !fetchExposesOccurrences) {
+  const sourceExposesOccurrences =
+    !isHeaders(message.headers) ||
+    (identifier.name === 'set-cookie' &&
+      typeof (message.headers as Headers & { getSetCookie?: unknown }).getSetCookie === 'function')
+  if (bs && options.fieldValues === undefined && !sourceExposesOccurrences) {
     fail(`"${identifier.name}";bs requires "fieldValues" because Fetch hides field occurrences`)
   }
 
@@ -3757,14 +4030,14 @@ function deriveFieldComponentValue(
  */
 function resolveComponentValue(
   identifier: MessageComponent,
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   options: SignatureContext,
   derivations: BaseDerivations,
 ): string {
   validateComponentForMessage(identifier, message)
   const parameters = componentParameterMap(identifier)
   const relatedRequest = parameters.has('req')
-  let source: Request | Response = message
+  let source: SignableRequest | SignableResponse = message
   if (relatedRequest) {
     if (options.request === undefined) {
       fail(`Component "${identifier.name}";req requires the related request`)
@@ -3817,7 +4090,7 @@ function resolveComponentValue(
  * {@link assertSignatureBaseUnchanged} re-reads the message.
  */
 function buildSignatureBase(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   components: ReadonlyArray<MessageComponent>,
   parameters: SfParameters,
   options: SignatureContext,
@@ -3865,7 +4138,7 @@ function assertSignatureBaseUnchanged(
 }
 
 /**
- * Creates the RFC 9421 signature base for a Fetch `Request` or `Response`.
+ * Creates the RFC 9421 signature base for a signable request or response.
  *
  * Unlike {@link createSignature}, this low-level function does not add a default `created`
  * parameter.
@@ -3909,7 +4182,7 @@ function assertSignatureBaseUnchanged(
  * @group Components
  */
 export function createSignatureBase(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   options: SignatureBaseOptions,
 ): string {
   assertMessage(message)
@@ -4236,8 +4509,8 @@ export function getSignatureParameter(
 }
 
 /**
- * Parses and pairs every signature carried by a Fetch message, so that an application can choose
- * which label to verify.
+ * Parses and pairs every signature carried by a message, so that an application can choose which
+ * label to verify.
  *
  * Returns an empty array when the message carries neither field. Throws when the two fields do not
  * pair up: one present without the other, a repeated label, or a label in one field that is missing
@@ -4275,9 +4548,11 @@ export function getSignatureParameter(
  *
  * @group Recipient
  */
-export function getSignatures(message: Request | Response): ReadonlyArray<MessageSignature> {
+export function getSignatures(
+  message: SignableRequest | SignableResponse,
+): ReadonlyArray<MessageSignature> {
   assertMessage(message)
-  const { inputs, values } = parseSignatureFieldMembers(message.headers)
+  const { inputs, values } = parseSignatureFieldMembers(toHeaders(message.headers))
   // Indexed once rather than scanned per input: both Dictionaries are peer-controlled and are read
   // before any signature has been verified, so pairing them by search would be quadratic whenever
   // the two label orders disagree.
@@ -4297,14 +4572,14 @@ export function getSignatures(message: Request | Response): ReadonlyArray<Messag
  * not covered by any signature and therefore carry no application meaning on their own.
  */
 function selectSignature(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   label: string | undefined,
 ): {
   readonly input: ParsedSignatureInput
   readonly signature: Uint8Array<ArrayBuffer>
   readonly public: MessageSignature
 } {
-  const { inputs, values } = parseSignatureFieldDictionaries(message.headers)
+  const { inputs, values } = parseSignatureFieldDictionaries(toHeaders(message.headers))
   if (inputs.length === 0) {
     fail('Message does not contain an HTTP message signature')
   }
@@ -4478,7 +4753,7 @@ interface SignatureCreation {
  * never be reproduced by a verifier.
  */
 async function createSignatureInternal(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   options: SignOptions,
 ): Promise<SignatureCreation> {
   assertMessage(message)
@@ -4489,7 +4764,7 @@ async function createSignatureInternal(
   const label = options.label ?? 'sig1'
   assertSfKey(label, 'Signature label')
 
-  const existing = parseSignatureFieldDictionaries(message.headers)
+  const existing = parseSignatureFieldDictionaries(toHeaders(message.headers))
   if (existing.inputs.some(([existingLabel]) => existingLabel === label)) {
     fail(`Signature label "${label}" is already present`)
   }
@@ -4543,7 +4818,7 @@ async function createSignatureInternal(
 }
 
 /**
- * Creates one HTTP message signature without modifying or cloning the Fetch message.
+ * Creates one HTTP message signature without modifying or cloning the source message.
  *
  * The returned one-member field values can be attached while constructing a message or passed to
  * {@link appendSignature}. A `created` timestamp is added by default. Pass `created: false` in
@@ -4613,7 +4888,7 @@ async function createSignatureInternal(
  * @group Sender
  */
 export async function createSignature(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   options: SignOptions,
 ): Promise<SignatureFields> {
   return (await createSignatureInternal(message, options)).fields
@@ -4794,6 +5069,7 @@ export function appendSignature(
     return appendSignatureHeaders(message, fields)
   }
   assertMessage(message)
+  message = normalizeMessage(message)
   const headers = appendSignatureHeaders(message.headers, fields)
   if (isRequest(message)) {
     return reconstructRequest(message, headers, 'HTTP message signatures')
@@ -5091,7 +5367,10 @@ function enforceVerificationAlgorithm(
  *   },
  * })
  *
- * declare function claimNonceOnce(nonce: string, message: Request | Response): Promise<void>
+ * declare function claimNonceOnce(
+ *   nonce: string,
+ *   message: FetchSig.NormalizedMessage,
+ * ): Promise<void>
  *
  * // ed25519 [ [ 'created', 1735689600 ], [ 'keyid', 'client-key' ], [ 'nonce', '…' ] ]
  * console.log(verified.algorithm, verified.parameters)
@@ -5127,7 +5406,7 @@ function enforceVerificationAlgorithm(
  * @group Recipient
  */
 export async function verify(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   options: VerifyOptions,
 ): Promise<VerifiedSignature> {
   assertMessage(message)
@@ -5152,7 +5431,9 @@ export async function verify(
   )
   assertMessageUnchanged(guard, 'verification')
 
-  const context: VerificationContext = { message, request: options.request }
+  // Each callback gets its own normalized view. A descriptor itself remains the source for the base
+  // and mutation guard, while a callback cannot change the context a later policy callback sees.
+  const context = normalizeVerificationContext(message, options.request)
   const verifier = await verifierFromFactory(options.verifier, cloneMessageSignature(signature), {
     ...context,
   })
@@ -5189,11 +5470,8 @@ export async function verify(
   }
   enforceVerificationPolicy(signature, policy)
   if (policy.validate !== undefined) {
-    await policy.validate(cloneMessageSignature(signature), {
-      message,
-      request: context.request,
-      algorithm,
-    })
+    const policyContext = normalizeVerificationContext(message, options.request)
+    await policy.validate(cloneMessageSignature(signature), { ...policyContext, algorithm })
     assertSignatureBaseUnchanged(
       guard,
       selected.input.components,
@@ -5316,8 +5594,8 @@ export function parseAcceptSignature(value: string): ReadonlyArray<SignatureRequ
 }
 
 /**
- * Parses every signature request carried by a Fetch message and checks that each requested
- * component applies to the message that would be signed.
+ * Parses every signature request carried by a message and checks that each requested component
+ * applies to the message that would be signed.
  *
  * The target message is the other direction: `Accept-Signature` on a request asks for a signature
  * on the response, and on a response it asks for a signature on the client's next request. Returns
@@ -5347,9 +5625,11 @@ export function parseAcceptSignature(value: string): ReadonlyArray<SignatureRequ
  *
  * @group Signature Negotiation
  */
-export function getSignatureRequests(message: Request | Response): ReadonlyArray<SignatureRequest> {
+export function getSignatureRequests(
+  message: SignableRequest | SignableResponse,
+): ReadonlyArray<SignatureRequest> {
   assertMessage(message)
-  const value = getDictionaryField(message.headers, 'accept-signature')
+  const value = getDictionaryField(toHeaders(message.headers), 'accept-signature')
   if (value === null) {
     return []
   }
@@ -5522,6 +5802,7 @@ export function appendAcceptSignature(
   requests: ReadonlyArray<SignatureRequestInput>,
 ): Request | Response {
   assertMessage(message)
+  message = normalizeMessage(message)
   const value = createAcceptSignature(requests)
   const targetIsRequest = !isRequest(message)
   for (const request of requests) {
@@ -5630,7 +5911,7 @@ function mergeRequestedParameters(
 
 /** Validates a parsed request and turns it into regular signing options. */
 function requestedSignatureOptions(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   request: SignatureRequest,
   options: RequestedSignOptions,
 ): SignOptions {
@@ -5662,7 +5943,7 @@ function requestedSignatureOptions(
 }
 
 /**
- * Fulfills one parsed `Accept-Signature` request without modifying the target Fetch message.
+ * Fulfills one parsed `Accept-Signature` request without modifying the target message.
  *
  * Signs exactly the requested label and covered components, and processes every requested signature
  * metadata parameter: a requested `created` defaults to the signing clock, a requested `expires` or
@@ -5703,7 +5984,7 @@ function requestedSignatureOptions(
  * @group Signature Negotiation
  */
 export async function createRequestedSignature(
-  message: Request | Response,
+  message: SignableRequest | SignableResponse,
   request: SignatureRequest,
   options: RequestedSignOptions,
 ): Promise<SignatureFields> {

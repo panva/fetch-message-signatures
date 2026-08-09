@@ -1,6 +1,6 @@
 # Sender guide
 
-A sender selects the parts of a Fetch message that are covered, supplies signature metadata, and
+A sender selects the parts of an HTTP message that are covered, supplies signature metadata, and
 provides a cryptographic signer. Signing creates two Structured Field Dictionaries:
 `Signature-Input`, which describes the signature base, and `Signature`, which carries the signature
 bytes.
@@ -273,6 +273,47 @@ console.log(base)
 Use it for protocol diagnostics and interoperability fixtures. Prefer `sign()` or
 `createSignature()` in application code so the signature bytes and serialized metadata are produced
 together.
+
+## Signing without a Fetch message
+
+`sign()`, `appendSignature()`, and `signRequested()` return a new `Request` or `Response`, so they
+need a Fetch message to rebuild. `appendAcceptSignature()` does too. A server that never constructs
+one passes a plain object to the reading operations instead, and attaches the two field values
+itself. The object carries `method`, `url` and `headers` for a request, or `status` and `headers`
+for a response:
+
+```ts
+declare const signer: FetchSig.SignerFactory
+
+const request: FetchSig.SignableRequest = {
+  method: 'POST',
+  url: 'https://api.example/orders?page=2',
+  headers: { 'content-type': 'application/json' },
+}
+
+const fields = await FetchSig.createSignature(
+  { status: 200, headers: { 'content-type': 'application/json' } },
+  {
+    signer,
+    request,
+    components: ['@status', FetchSig.component('@authority', { req: true })],
+    parameters: { created: 1_735_689_600, keyid: 'server-key', alg: 'ed25519' },
+  },
+)
+
+// Attach these two the way the surrounding server sets a response field.
+fields.signatureInput // signature-input
+fields.signatureField // signature
+```
+
+`headers` accepts a `Headers`, or a plain record whose values are a string or an array of strings.
+An array is one field with repeated occurrences, which RFC 9421 combines with `", "`. Passing the
+record straight through matters: building a `Headers` from it first would join those occurrences
+with a bare comma and fold repeated `Set-Cookie` lines into one, changing what gets signed.
+
+`verify()` takes the same shape, so the receiving side reads an incoming request the same way. Every
+operation that only reads a message accepts it: `createSignatureBase()`, `createSignature()`,
+`createRequestedSignature()`, `verify()`, `getSignatures()`, and `getSignatureRequests()`.
 
 ## Signing without awaiting
 

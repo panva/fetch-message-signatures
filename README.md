@@ -114,10 +114,14 @@ Fields, `Accept-Signature`, Fetch behavior, and security guidance, see the
 
 ## Runtime Requirements
 
-The module requires standards-compatible `Request`, `Response`, and `Headers` implementations. The
-Fetch wrappers also require a Fetch implementation. The built-in cryptographic providers require the
-Web Cryptography API and runtime support for the selected algorithm. The package does not provide
-polyfills.
+The Fetch wrappers, `sign()`, `appendSignature()`, `signRequested()`, and `appendAcceptSignature()`
+require standards-compatible `Request`, `Response`, and `Headers` implementations, and the wrappers
+also require `fetch` itself. Every reading operation, including `createSignature()` and `verify()`,
+additionally accepts a plain object carrying `method`, `url`, and `headers` for a request, or
+`status` and `headers` for a response, so a server that never constructs a `Request` can sign and
+verify by attaching the returned field values itself. The built-in cryptographic providers require
+the Web Cryptography API and runtime support for the selected algorithm. The package does not
+provide polyfills.
 
 Structured Field Byte Sequences use `Uint8Array.prototype.toBase64()` and `Uint8Array.fromBase64()`
 where they are available, and fall back to `btoa()` and `atob()` where they are not. Both paths
@@ -135,7 +139,7 @@ repeated field lines, trailers, and response reconstruction, is documented in
   P-256, ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and RSASSA-PKCS1-v1_5 with SHA-256.
 - Bind a response signature to components of its related request.
 - Create, parse, append, and fulfill `Accept-Signature` requests.
-- Derive RFC 9421 request and response components from Fetch messages.
+- Derive RFC 9421 request and response components from Fetch messages or plain descriptors.
 - Process HTTP fields as Structured Fields, dictionary members, raw byte sequences, or trailers.
 - Parse and serialize Structured Field Dictionaries, Lists, and Items.
 - Wrap `fetch` with request signing, response verification, or both through independent

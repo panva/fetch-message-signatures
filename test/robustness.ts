@@ -1479,7 +1479,7 @@ describe('option and message shape validation', () => {
     const message = { method: 'GET', headers: new Headers() } as unknown as Request
     assert.throws(
       () => createSignatureBase(message, { components: ['@method'] }),
-      /"message" must be a Request or Response/,
+      /"message" must be a Request, Response, or plain message descriptor/,
     )
   })
 })
@@ -1618,7 +1618,7 @@ describe('field adapter contract', () => {
   it('requires an adapter for trailers because Fetch does not expose them', () => {
     assert.throws(
       () => createSignatureBase(request, { components: [component('expires', { tr: true })] }),
-      /Trailer field "expires" is not exposed by Fetch/,
+      /Trailer field "expires" is not exposed by the message/,
     )
   })
 

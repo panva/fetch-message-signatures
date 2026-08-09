@@ -67,7 +67,7 @@ Injectable clock used for the default `created` parameter.
 
 ### request?
 
-> `readonly` `optional` **request?**: `Request`
+> `readonly` `optional` **request?**: [`SignableRequest`](../type-aliases/SignableRequest.md)
 
 The exact request that triggered a response. Required when a response signature uses `;req`.
 

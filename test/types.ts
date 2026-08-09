@@ -1,4 +1,5 @@
 import {
+  createSignatureBase,
   createSignedFetch,
   createSigningFetch,
   createVerifyingFetch,
@@ -8,6 +9,8 @@ import {
   serializeStructuredField,
 } from '../index.ts'
 import type {
+  SignableRequest,
+  SignableResponse,
   SignatureParameters,
   StructuredFieldDictionary,
   StructuredFieldItem,
@@ -75,6 +78,21 @@ const roundTripped: string = serializeStructuredField(parsedDictionary, 'diction
 void parsedList
 void parsedItem
 void roundTripped
+
+// A plain descriptor is accepted with no cast, and a Fetch message still is.
+const descriptorRequest: SignableRequest = {
+  method: 'POST',
+  url: 'https://api.example/orders',
+  headers: { 'content-type': 'application/json', 'x-multi': ['one', 'two'] },
+}
+const descriptorResponse: SignableResponse = { status: 200, headers: new Headers() }
+const fetchRequest: SignableRequest = new Request('https://api.example/orders')
+const fetchResponse: SignableResponse = new Response('')
+
+void createSignatureBase(descriptorRequest, { components: ['@method'] })
+void createSignatureBase(descriptorResponse, { components: ['@status'] })
+void createSignatureBase(fetchRequest, { components: ['@method'] })
+void createSignatureBase(fetchResponse, { components: ['@status'] })
 
 const structuredDate: StructuredFieldDate = date(1_659_578_233)
 const structuredDisplayString: StructuredFieldDisplayString = displayString('snowman ☃')

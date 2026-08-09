@@ -2,7 +2,7 @@
 
 > **createSignature**(`message`, `options`): `Promise`<[`SignatureFields`](../interfaces/SignatureFields.md)>
 
-Creates one HTTP message signature without modifying or cloning the Fetch message.
+Creates one HTTP message signature without modifying or cloning the source message.
 
 The returned one-member field values can be attached while constructing a message or passed to
 [appendSignature](appendSignature.md). A `created` timestamp is added by default. Pass `created: false` in
@@ -12,7 +12,7 @@ The returned one-member field values can be attached while constructing a messag
 
 | Parameter | Type |
 | :------ | :------ |
-| `message` | `Request` ∣ `Response` |
+| `message` | [`SignableRequest`](../type-aliases/SignableRequest.md) ∣ [`SignableResponse`](../type-aliases/SignableResponse.md) |
 | `options` | [`SignOptions`](../interfaces/SignOptions.md) |
 
 ## Returns

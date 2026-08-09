@@ -11,7 +11,7 @@ failure. When multiple signatures are present, callers must select a label expli
 
 | Parameter | Type |
 | :------ | :------ |
-| `message` | `Request` ∣ `Response` |
+| `message` | [`SignableRequest`](../type-aliases/SignableRequest.md) ∣ [`SignableResponse`](../type-aliases/SignableResponse.md) |
 | `options` | [`VerifyOptions`](../interfaces/VerifyOptions.md) |
 
 ## Returns
@@ -47,7 +47,10 @@ const verified = await FetchSig.verify(request, {
   },
 })
 
-declare function claimNonceOnce(nonce: string, message: Request | Response): Promise<void>
+declare function claimNonceOnce(
+  nonce: string,
+  message: FetchSig.NormalizedMessage,
+): Promise<void>
 
 // ed25519 [ [ 'created', 1735689600 ], [ 'keyid', 'client-key' ], [ 'nonce', '…' ] ]
 console.log(verified.algorithm, verified.parameters)

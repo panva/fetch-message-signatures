@@ -93,7 +93,7 @@ plus a `verify` block, and checks the response against the exact request that pr
 | Function | Description |
 | :------ | :------ |
 | [appendSignature](functions/appendSignature.md) | Adds one signature to `Headers` and returns a new `Headers` object. |
-| [createSignature](functions/createSignature.md) | Creates one HTTP message signature without modifying or cloning the Fetch message. |
+| [createSignature](functions/createSignature.md) | Creates one HTTP message signature without modifying or cloning the source message. |
 | [createSignatureFields](functions/createSignatureFields.md) | Serializes a signature produced outside this package into its `Signature-Input` and `Signature` fields. |
 | [sign](functions/sign.md) | Creates and appends one HTTP message signature. |
 
@@ -102,7 +102,7 @@ plus a `verify` block, and checks the response against the exact request that pr
 | Function | Description |
 | :------ | :------ |
 | [getSignatureParameter](functions/getSignatureParameter.md) | Returns one signature metadata parameter by name, or `undefined` when the signature omits it. |
-| [getSignatures](functions/getSignatures.md) | Parses and pairs every signature carried by a Fetch message, so that an application can choose which label to verify. |
+| [getSignatures](functions/getSignatures.md) | Parses and pairs every signature carried by a message, so that an application can choose which label to verify. |
 | [parseSignature](functions/parseSignature.md) | Parses a `Signature` field value into its labeled signature byte sequences. |
 | [parseSignatureInput](functions/parseSignatureInput.md) | Parses a `Signature-Input` field value into its labeled covered component lists and signature metadata parameters. |
 | [verify](functions/verify.md) | Verifies and applies explicit application policy to one HTTP message signature. |
@@ -113,8 +113,8 @@ plus a `verify` block, and checks the response against the exact request that pr
 | :------ | :------ |
 | [appendAcceptSignature](functions/appendAcceptSignature.md) | Adds `Accept-Signature` requests to a `Request` or `Response` and returns a new message. |
 | [createAcceptSignature](functions/createAcceptSignature.md) | Serializes one or more signature requests as an `Accept-Signature` Structured Field Dictionary. |
-| [createRequestedSignature](functions/createRequestedSignature.md) | Fulfills one parsed `Accept-Signature` request without modifying the target Fetch message. |
-| [getSignatureRequests](functions/getSignatureRequests.md) | Parses every signature request carried by a Fetch message and checks that each requested component applies to the message that would be signed. |
+| [createRequestedSignature](functions/createRequestedSignature.md) | Fulfills one parsed `Accept-Signature` request without modifying the target message. |
+| [getSignatureRequests](functions/getSignatureRequests.md) | Parses every signature request carried by a message and checks that each requested component applies to the message that would be signed. |
 | [parseAcceptSignature](functions/parseAcceptSignature.md) | Parses an `Accept-Signature` field value into its labeled signature requests. |
 | [signRequested](functions/signRequested.md) | Fulfills and appends one parsed `Accept-Signature` request. |
 
@@ -123,7 +123,7 @@ plus a `verify` block, and checks the response against the exact request that pr
 | Function | Description |
 | :------ | :------ |
 | [component](functions/component.md) | Creates a component identifier while preserving the supplied parameter order. |
-| [createSignatureBase](functions/createSignatureBase.md) | Creates the RFC 9421 signature base for a Fetch `Request` or `Response`. |
+| [createSignatureBase](functions/createSignatureBase.md) | Creates the RFC 9421 signature base for a signable request or response. |
 | [findComponents](functions/findComponents.md) | Returns every component identifier in a list that resolves to one field or derived component name, whatever parameters it carries. |
 | [includesComponent](functions/includesComponent.md) | Reports whether a list of component identifiers contains one particular identifier. |
 
@@ -203,6 +203,11 @@ plus a `verify` block, and checks the response against the exact request that pr
 | [ComponentParameterValue](type-aliases/ComponentParameterValue.md) | A value supported by an HTTP message component parameter. |
 | [CryptoKey](type-aliases/CryptoKey.md) | A Web Cryptography key, resolved from the host runtime. |
 | [FieldValues](type-aliases/FieldValues.md) | Supplies individual HTTP field occurrences in wire order. |
+| [HeadersInput](type-aliases/HeadersInput.md) | HTTP fields supplied to a reading operation. |
+| [NormalizedMessage](type-aliases/NormalizedMessage.md) | A [SignableRequest](type-aliases/SignableRequest.md) or [SignableResponse](type-aliases/SignableResponse.md) whose fields use the host's `Headers` representation. This is an application-processing view, not an occurrence-preserving view. |
+| [NormalizedRequest](type-aliases/NormalizedRequest.md) | A [SignableRequest](type-aliases/SignableRequest.md) whose fields use the host's `Headers` representation. |
+| [SignableRequest](type-aliases/SignableRequest.md) | A request this package can read components from. |
+| [SignableResponse](type-aliases/SignableResponse.md) | A response this package can read components from. |
 | [SignatureParameter](type-aliases/SignatureParameter.md) | An ordered signature metadata parameter. |
 | [SignatureParameterInput](type-aliases/SignatureParameterInput.md) | A signature metadata parameter input. |
 | [SignatureParameters](type-aliases/SignatureParameters.md) | Ordered parameters are recommended because their order is covered by the signature. Object property insertion order is preserved when a record is supplied. |

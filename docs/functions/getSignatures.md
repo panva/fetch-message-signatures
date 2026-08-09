@@ -2,8 +2,8 @@
 
 > **getSignatures**(`message`): readonly [`MessageSignature`](../interfaces/MessageSignature.md)\[]
 
-Parses and pairs every signature carried by a Fetch message, so that an application can choose
-which label to verify.
+Parses and pairs every signature carried by a message, so that an application can choose which
+label to verify.
 
 Returns an empty array when the message carries neither field. Throws when the two fields do not
 pair up: one present without the other, a repeated label, or a label in one field that is missing
@@ -16,7 +16,7 @@ This reports what a message claims. Nothing here is authenticated until [verify]
 
 | Parameter | Type |
 | :------ | :------ |
-| `message` | `Request` ∣ `Response` |
+| `message` | [`SignableRequest`](../type-aliases/SignableRequest.md) ∣ [`SignableResponse`](../type-aliases/SignableResponse.md) |
 
 ## Returns
 

@@ -6,12 +6,14 @@
 //
 //   algorithms-node.ts  cross-verifies against node:crypto, which is the point of the test
 //   e2e.ts              needs a Node.js HTTP server
+//   frameworks.ts       starts express, koa and fastify servers
 //   runtime-e2e.ts      needs each runtime's own server API
 //   types.ts            type-level assertions only, checked by `node --run test:types`
 
 import '../accept-signature-boundaries.ts'
 import '../accept-signature.ts'
 import '../algorithms.ts'
+import '../descriptors.ts'
 import '../fields.ts'
 import '../rfc9421-appendix.ts'
 import '../rfc9421.ts'

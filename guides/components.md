@@ -281,7 +281,8 @@ lowercase field name, and flags indicating trailers and related-request access. 
 `undefined` or an empty array means absent. Values containing disallowed control characters or
 newlines are rejected. Keep header and trailer occurrences separate by branching on
 `context.trailers`. Runtimes with `Headers.getSetCookie()` can provide `set-cookie` occurrences
-without an adapter.
+without an adapter. A plain message descriptor also retains occurrences without an adapter when the
+field value is supplied as an array.
 
 Occurrences without `bs` are combined with a comma and a single space. `bs` instead wraps each
 occurrence as a Structured Field Byte Sequence, taking one octet per JavaScript code unit, which is
