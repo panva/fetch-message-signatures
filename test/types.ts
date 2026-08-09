@@ -7,6 +7,7 @@ import {
   displayString,
   parseStructuredField,
   serializeStructuredField,
+  VerificationError,
 } from '../index.ts'
 import type {
   SignableRequest,
@@ -20,12 +21,21 @@ import type {
   SigningFetchOptions,
   StructuredFieldDate,
   StructuredFieldDisplayString,
+  VerificationErrorCode,
   VerifierFactory,
   VerifyingFetchOptions,
 } from '../index.ts'
 
 let privateKey!: CryptoKey
 let publicKey!: CryptoKey
+
+const verificationCause = new Error('key store unavailable')
+const verificationError = new VerificationError('unknown_key', 'Unknown signing key', {
+  cause: verificationCause,
+})
+const verificationCode: VerificationErrorCode = verificationError.code
+
+void verificationCode
 
 const signer: SignerFactory = () => ({
   alg: 'ed25519',

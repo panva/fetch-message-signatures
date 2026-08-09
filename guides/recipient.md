@@ -16,12 +16,12 @@ declare const trustedKeys: ReadonlyMap<string, CryptoKey>
 const verifier: FetchSig.VerifierFactory = (signature, context) => {
   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
   if (typeof keyid !== 'string') {
-    throw new Error('A key identifier is required')
+    throw new FetchSig.VerificationError('unknown_key', 'A key identifier is required')
   }
 
   const key = trustedKeys.get(keyid)
   if (key === undefined) {
-    throw new Error('Unknown signing key')
+    throw new FetchSig.VerificationError('unknown_key', 'Unknown signing key')
   }
 
   // A request snapshot is the variant carrying `method` and `url`.
@@ -29,7 +29,7 @@ const verifier: FetchSig.VerifierFactory = (signature, context) => {
     'method' in context.message &&
     new URL(context.message.url).origin !== 'https://api.example'
   ) {
-    throw new Error('Key is not authorized for this origin')
+    throw new FetchSig.VerificationError('unknown_key', 'Signing key is not valid for this message')
   }
 
   return {
@@ -241,7 +241,25 @@ as `Signature: rogue=:AA==:` and make every legitimate signature on that message
 That is a denial of service, not a forgery, but reject or strip unexpected signature members at the
 edge if availability under that condition matters.
 
-`verify()` throws for malformed fields, missing context, policy rejection, key-selection errors,
-algorithm mismatches, and cryptographic failure. Treat every thrown error as authentication failure
-at a protocol boundary. Detailed error text can be useful in private diagnostics but generally
-should not be reflected to an untrusted peer.
+Invalid configuration and provider contracts throw a `TypeError`. Verification failures throw
+`VerificationError`; branch on its stable `code`, never its diagnostic `message`:
+
+| Code                     | Meaning                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `signature_missing`      | The message carries no HTTP message signature.                                                       |
+| `signature_malformed`    | Its fields, covered components, timestamps, or message context cannot form a valid signature base.   |
+| `policy_rejected`        | Required coverage, parameters, or algorithms are absent or disallowed, or custom policy rejected it. |
+| `signature_time_invalid` | The signature is not yet valid, has expired, or exceeds `maxAge`.                                    |
+| `unknown_key`            | A verifier factory explicitly reported that the claimed key is unknown.                              |
+| `algorithm_unsupported`  | A verifier factory explicitly reported that it cannot verify the selected algorithm.                 |
+| `signature_mismatch`     | The cryptographic verifier returned `false`.                                                         |
+| `verification_failed`    | Key resolution, the verifier provider, or message-stability checking failed operationally.           |
+
+Verifier-provider and `policy.validate` exceptions are wrapped as their stage's code and preserved
+as `cause`. A verifier factory can explicitly signal `unknown_key` or `algorithm_unsupported` by
+throwing a `VerificationError`; that signal is itself preserved as `cause`. Other factory exceptions
+use `verification_failed`, so an unavailable key service is not misreported as an unknown key.
+
+Treat every verification error as authentication failure at a protocol boundary. Codes are useful
+for private recovery and diagnostics, but detailed error text generally should not be reflected to
+an untrusted peer.

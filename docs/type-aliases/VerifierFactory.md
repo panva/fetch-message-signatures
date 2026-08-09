@@ -16,6 +16,10 @@ here. A `keyid` is unauthenticated at this point, so resolve it through trusted 
 never treat it as a location to fetch. The signature base is rebuilt after the factory settles,
 so a message that changes while a key is being fetched is rejected rather than verified.
 
+Throw [VerificationError](../classes/VerificationError.md) with `unknown_key` or `algorithm_unsupported` to expose either
+result as a stable error code. Other factory exceptions are reported as `verification_failed`
+with the original exception as their `cause`.
+
 ## Parameters
 
 | Parameter | Type |

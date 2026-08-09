@@ -21,6 +21,7 @@ import {
   sign,
   token,
   verify,
+  VerificationError,
 } from '../index.ts'
 import type {
   MessageSignature,
@@ -31,6 +32,7 @@ import type {
   StructuredFieldType,
   SynchronousVerifierFactory,
   VerificationPolicy,
+  Verifier,
   VerifierFactory,
   RequestSnapshot,
 } from '../index.ts'
@@ -570,10 +572,11 @@ describe('synchronous providers', () => {
     const tampered = new Request(signed, { headers: new Headers(signed.headers) })
     tampered.headers.set('x-covered', 'tampered')
 
-    await assert.rejects(
-      verify(tampered, { verifier: syncVerifier, policy: syncPolicy() }),
-      /HTTP message signature verification failed/,
-    )
+    await assert.rejects(verify(tampered, { verifier: syncVerifier, policy: syncPolicy() }), {
+      name: 'VerificationError',
+      code: 'signature_mismatch',
+      message: /HTTP message signature verification failed/,
+    })
   })
 
   it('applies the same output checks to a synchronous provider', async () => {
@@ -591,7 +594,7 @@ describe('synchronous providers', () => {
         verifier: () => ({ alg: 'sync-stub', verify: () => 1 as never }),
         policy: syncPolicy(),
       }),
-      /Verifier output must be a boolean/,
+      { name: 'TypeError', message: /Verifier output must be a boolean/ },
     )
   })
 })
@@ -740,7 +743,8 @@ describe('provider contracts and mutation resistance', () => {
         policy: verificationPolicy(),
       }),
       (error: unknown) => {
-        assert.ok(error instanceof TypeError)
+        assert.ok(error instanceof VerificationError)
+        assert.equal(error.code, 'verification_failed')
         assert.equal(error.message, 'Invalid "verifier"')
         assert.equal((error.cause as Error).message, 'unknown key')
         return true
@@ -748,29 +752,59 @@ describe('provider contracts and mutation resistance', () => {
     )
     await assert.rejects(
       verify(signed, { verifier: (() => ({})) as never, policy: verificationPolicy() }),
-      /Invalid "verifier"/,
+      (error: unknown) => {
+        assert.ok(error instanceof TypeError)
+        assert.equal(error.message, 'Invalid "verifier"')
+        assert.equal((error.cause as Error).message, 'Invalid verifier implementation')
+        return true
+      },
     )
   })
 
   it('wraps verifier operation failures with the original cause', async () => {
     const signed = await signedFixture()
+    const cause = new VerificationError('signature_mismatch', 'remote HSM failure')
     await assert.rejects(
       verify(signed, {
         verifier: () => ({
           alg: 'hmac-sha256',
           async verify() {
-            throw new Error('remote HSM failure')
+            throw cause
           },
         }),
         policy: verificationPolicy(),
       }),
       (error: unknown) => {
-        assert.ok(error instanceof Error)
+        assert.ok(error instanceof VerificationError)
+        assert.equal(error.code, 'verification_failed')
         assert.equal(error.message, 'Failed to verify HTTP message signature')
-        assert.equal((error.cause as Error).message, 'remote HSM failure')
+        assert.equal(error.cause, cause)
         return true
       },
     )
+  })
+
+  it('snapshots verifier properties once and preserves the method receiver', async () => {
+    const signed = await signedFixture()
+    let algorithmReads = 0
+    const verifier: Verifier = {
+      get alg() {
+        algorithmReads++
+        if (algorithmReads !== 1) {
+          throw new Error('algorithm was read again')
+        }
+        return 'hmac-sha256'
+      },
+      verify() {
+        assert.equal(this, verifier)
+        return true
+      },
+    }
+
+    await assert.doesNotReject(
+      verify(signed, { verifier: () => verifier, policy: verificationPolicy() }),
+    )
+    assert.equal(algorithmReads, 1)
   })
 
   it('rejects a non-boolean verifier result', async () => {
@@ -785,7 +819,7 @@ describe('provider contracts and mutation resistance', () => {
         }),
         policy: verificationPolicy(),
       }),
-      /Verifier output must be a boolean/,
+      { name: 'TypeError', message: /Verifier output must be a boolean/ },
     )
   })
 
@@ -801,7 +835,11 @@ describe('provider contracts and mutation resistance', () => {
         },
         policy: verificationPolicy(),
       }),
-      /headers changed during signature verification/,
+      {
+        name: 'VerificationError',
+        code: 'verification_failed',
+        message: /headers changed during signature verification/,
+      },
     )
   })
 

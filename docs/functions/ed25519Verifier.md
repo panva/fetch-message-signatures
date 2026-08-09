@@ -29,12 +29,12 @@ declare const publicKeys: ReadonlyMap<string, CryptoKey>
 const verifier: FetchSig.VerifierFactory = (signature, context) => {
   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
   if (typeof keyid !== 'string') {
-    throw new Error('A key identifier is required')
+    throw new FetchSig.VerificationError('unknown_key', 'A key identifier is required')
   }
 
   const publicKey = publicKeys.get(keyid)
   if (publicKey === undefined) {
-    throw new Error('Unknown signing key')
+    throw new FetchSig.VerificationError('unknown_key', 'Unknown signing key')
   }
 
   return FetchSig.ed25519Verifier(publicKey)(signature, context)

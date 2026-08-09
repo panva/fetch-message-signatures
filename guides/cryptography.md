@@ -160,8 +160,8 @@ and the `fetch` wrappers all return Promises whatever the provider does.
 The provider must use the signature representation defined for its HTTP Message Signatures
 algorithm, including its hashing, padding, and encoding rules. Both provider methods receive owned
 `Uint8Array` values backed by `ArrayBuffer`. `sign()` produces a `Uint8Array`, and `verify()` a
-boolean. Provider exceptions become signature creation or verification failures whose `cause` is the
-original error. Signer output is copied before it is returned or serialized.
+boolean. Provider exceptions become signature creation or `verification_failed` errors, with the
+original error preserved as `cause`. Signer output is copied before it is returned or serialized.
 
 Use a cryptographic library's verification primitive rather than comparing signatures in application
 JavaScript. When implementing a custom MAC verifier, the provider is responsible for constant-time

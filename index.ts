@@ -25,7 +25,9 @@
  *
  * const verifier: FetchSig.VerifierFactory = (signature, context) => {
  *   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
- *   if (keyid !== 'example-key') throw new Error('Untrusted signing key')
+ *   if (keyid !== 'example-key') {
+ *     throw new FetchSig.VerificationError('unknown_key', 'Unknown signing key')
+ *   }
  *   return verifyWithKey(signature, context)
  * }
  *
@@ -445,6 +447,10 @@ export interface Verifier {
  * here. A `keyid` is unauthenticated at this point, so resolve it through trusted configuration and
  * never treat it as a location to fetch. The signature base is rebuilt after the factory settles,
  * so a message that changes while a key is being fetched is rejected rather than verified.
+ *
+ * Throw {@link VerificationError} with `unknown_key` or `algorithm_unsupported` to expose either
+ * result as a stable error code. Other factory exceptions are reported as `verification_failed`
+ * with the original exception as their `cause`.
  */
 export type VerifierFactory = (
   signature: Readonly<MessageSignature>,
@@ -494,6 +500,41 @@ export interface VerificationPolicy {
     signature: Readonly<MessageSignature>,
     context: Readonly<VerifiedSignatureContext>,
   ): void | Promise<void>
+}
+
+/** Stable machine-readable reasons why HTTP message signature verification failed. */
+export type VerificationErrorCode =
+  | 'signature_missing'
+  | 'signature_malformed'
+  | 'policy_rejected'
+  | 'signature_time_invalid'
+  | 'unknown_key'
+  | 'algorithm_unsupported'
+  | 'signature_mismatch'
+  | 'verification_failed'
+
+/**
+ * An HTTP message signature verification failure.
+ *
+ * Branch on {@link code}, not `message`, which is diagnostic and may change. Failures originating in
+ * a verifier factory, verifier implementation, or application policy preserve the original
+ * exception as `cause`.
+ *
+ * A verifier factory may throw this with `unknown_key` when a claimed key cannot be resolved, or
+ * with `algorithm_unsupported` when it cannot verify the selected algorithm. Other factory
+ * exceptions become `verification_failed`, so an unavailable key service is not mistaken for an
+ * unknown key.
+ *
+ * @group Recipient
+ */
+export class VerificationError extends Error {
+  readonly code: VerificationErrorCode
+
+  constructor(code: VerificationErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'VerificationError'
+    this.code = code
+  }
 }
 
 /** Recipient options. */
@@ -565,13 +606,31 @@ interface ParseState {
 }
 
 /**
- * Throws the `TypeError` used for every input, syntax, and policy rejection in this module.
+ * Throws the error used for an input, syntax, or policy rejection in this module.
  *
  * The `never` return type lets call sites use it as an expression, so a validation branch can both
  * reject and satisfy a function's declared return type.
  */
 function fail(message: string): never {
   throw new TypeError(message)
+}
+
+/** Throws a deterministic HTTP message signature verification failure. */
+function verificationFail(code: VerificationErrorCode, message: string): never {
+  throw new VerificationError(code, message)
+}
+
+/** Wraps an application or provider exception as the verification stage that rejected it. */
+function verificationError(
+  code: VerificationErrorCode,
+  cause: unknown,
+  message?: string,
+): VerificationError {
+  return new VerificationError(
+    code,
+    message ?? (cause instanceof Error ? cause.message : String(cause)),
+    { cause },
+  )
 }
 
 type AlgorithmKeyType = 'private' | 'public'
@@ -963,12 +1022,12 @@ export function ed25519Signer(key: CryptoKey): SignerFactory {
  * const verifier: FetchSig.VerifierFactory = (signature, context) => {
  *   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
  *   if (typeof keyid !== 'string') {
- *     throw new Error('A key identifier is required')
+ *     throw new FetchSig.VerificationError('unknown_key', 'A key identifier is required')
  *   }
  *
  *   const publicKey = publicKeys.get(keyid)
  *   if (publicKey === undefined) {
- *     throw new Error('Unknown signing key')
+ *     throw new FetchSig.VerificationError('unknown_key', 'Unknown signing key')
  *   }
  *
  *   return FetchSig.ed25519Verifier(publicKey)(signature, context)
@@ -1508,6 +1567,15 @@ function assertBindingUnchanged(
       !occurrenceKnowledgeEqual(binding.requestSnapshot, currentRequest!))
   ) {
     throw new Error(`HTTP message field occurrences changed during signature ${operation}`)
+  }
+}
+
+/** Reports a message mutation during verification as an operational verification failure. */
+function assertVerificationBindingUnchanged(binding: MessageBinding): void {
+  try {
+    assertBindingUnchanged(binding, 'verification')
+  } catch (cause) {
+    throw verificationError('verification_failed', cause)
   }
 }
 
@@ -4385,12 +4453,12 @@ function parseSignatureFieldMembers(headers: Headers | FieldOccurrences): {
  * const verifier: FetchSig.VerifierFactory = (signature, context) => {
  *   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
  *   if (typeof keyid !== 'string') {
- *     throw new Error('A key identifier is required')
+ *     throw new FetchSig.VerificationError('unknown_key', 'A key identifier is required')
  *   }
  *
  *   const publicKey = publicKeys.get(keyid)
  *   if (publicKey === undefined) {
- *     throw new Error('Unknown signing key')
+ *     throw new FetchSig.VerificationError('unknown_key', 'Unknown signing key')
  *   }
  *
  *   return FetchSig.ed25519Verifier(publicKey)(signature, context)
@@ -4483,38 +4551,45 @@ function selectSignature(
   readonly signature: Uint8Array<ArrayBuffer>
   readonly public: MessageSignature
 } {
-  const { inputs, values } = parseSignatureFieldDictionaries(message.headers)
-  if (inputs.length === 0) {
-    fail('Message does not contain an HTTP message signature')
+  let dictionaries: ReturnType<typeof parseSignatureFieldDictionaries>
+  try {
+    dictionaries = parseSignatureFieldDictionaries(message.headers)
+  } catch (cause) {
+    throw verificationError('signature_malformed', cause)
   }
-  let inputMember: SfDictionaryEntry | undefined
+  const { inputs, values } = dictionaries
+  if (inputs.length === 0) {
+    verificationFail('signature_missing', 'Message does not contain an HTTP message signature')
+  }
+  let inputMember: SfDictionaryEntry
   if (label === undefined) {
     if (inputs.length !== 1) {
       fail('"label" is required when a message contains multiple signatures')
     }
-    inputMember = inputs[0]
+    inputMember = inputs[0]!
   } else {
-    assertSfKey(label, 'Signature label')
-    inputMember = inputs.find(([candidate]) => candidate === label)
-    if (inputMember === undefined) {
-      fail(`Message does not contain signature label "${label}"`)
+    const found = inputs.find(([candidate]) => candidate === label)
+    if (found === undefined) {
+      verificationFail('signature_missing', `Message does not contain signature label "${label}"`)
     }
+    inputMember = found
   }
-  if (inputMember === undefined) {
-    return fail('Unable to select an HTTP message signature')
-  }
-  const input = validateSignatureInput(parseSignatureInputMember(...inputMember))
-  const valueMember = values.find(([candidate]) => candidate === input.label)!
-  const signature = parseSignatureValueMember(...valueMember).value
-  return {
-    input,
-    signature,
-    public: {
-      label: input.label,
-      components: input.components,
-      parameters: signatureParametersFromSf(input.parameters),
+  try {
+    const input = validateSignatureInput(parseSignatureInputMember(...inputMember))
+    const valueMember = values.find(([candidate]) => candidate === input.label)!
+    const signature = parseSignatureValueMember(...valueMember).value
+    return {
+      input,
       signature,
-    },
+      public: {
+        label: input.label,
+        components: input.components,
+        parameters: signatureParametersFromSf(input.parameters),
+        signature,
+      },
+    }
+  } catch (cause) {
+    throw verificationError('signature_malformed', cause)
   }
 }
 
@@ -4549,8 +4624,9 @@ function signerFromFactory(factory: SignerFactory): Readonly<Signer> {
  * Invokes a {@link VerifierFactory} with the parsed signature and message context, and rejects a
  * return value that does not implement {@link Verifier}.
  *
- * The factory is the application's key-selection and trust boundary, so any exception it throws or
- * rejection it returns, such as an unknown `keyid`, becomes the `cause` of the reported error.
+ * The factory is the application's key-selection and trust boundary. It can explicitly report an
+ * `unknown_key` or `algorithm_unsupported` {@link VerificationError}. Any other exception or
+ * rejection becomes the `cause` of a `verification_failed` error.
  */
 async function verifierFromFactory(
   factory: VerifierFactory,
@@ -4563,19 +4639,32 @@ async function verifierFromFactory(
   let verifier: Readonly<Verifier>
   try {
     verifier = await factory(signature, context)
+  } catch (cause) {
+    if (
+      cause instanceof VerificationError &&
+      (cause.code === 'unknown_key' || cause.code === 'algorithm_unsupported')
+    ) {
+      throw verificationError(cause.code, cause)
+    }
+    throw verificationError('verification_failed', cause, 'Invalid "verifier"')
+  }
+
+  try {
+    const alg = verifier?.alg
+    const verify = verifier?.verify
     if (
       verifier === null ||
       typeof verifier !== 'object' ||
-      typeof verifier.alg !== 'string' ||
-      verifier.alg.length === 0 ||
-      typeof verifier.verify !== 'function'
+      typeof alg !== 'string' ||
+      alg.length === 0 ||
+      typeof verify !== 'function'
     ) {
       throw new TypeError('Invalid verifier implementation')
     }
+    return { alg, verify: verify.bind(verifier) }
   } catch (cause) {
     throw new TypeError('Invalid "verifier"', { cause })
   }
-  return verifier
 }
 
 /** Returns the value of one public signature metadata parameter, or `undefined` when it is absent. */
@@ -5166,18 +5255,18 @@ function enforceVerificationPolicy(
 ): void {
   const signaledAlgorithm = findSignatureParameterValue(signature.parameters, 'alg')
   if (typeof signaledAlgorithm === 'string' && !policy.algorithms.includes(signaledAlgorithm)) {
-    fail(`Algorithm "${signaledAlgorithm}" is not allowed by policy`)
+    verificationFail('policy_rejected', `Algorithm "${signaledAlgorithm}" is not allowed by policy`)
   }
 
   for (const required of policy.requiredComponents) {
     if (!signature.components.some((covered) => sameComponent(required, covered))) {
-      fail(`Required component "${required.name}" is not covered`)
+      verificationFail('policy_rejected', `Required component "${required.name}" is not covered`)
     }
   }
 
   for (const parameter of policy.requiredParameters) {
     if (findSignatureParameterValue(signature.parameters, parameter) === undefined) {
-      fail(`Required signature parameter "${parameter}" is missing`)
+      verificationFail('policy_rejected', `Required signature parameter "${parameter}" is missing`)
     }
   }
 
@@ -5188,27 +5277,33 @@ function enforceVerificationPolicy(
   const created = findSignatureParameterValue(signature.parameters, 'created')
   const expires = findSignatureParameterValue(signature.parameters, 'expires')
   if (created !== undefined && typeof created !== 'number') {
-    fail('Signature parameter "created" must be an Integer')
+    verificationFail('signature_malformed', 'Signature parameter "created" must be an Integer')
   }
   if (expires !== undefined && typeof expires !== 'number') {
-    fail('Signature parameter "expires" must be an Integer')
+    verificationFail('signature_malformed', 'Signature parameter "expires" must be an Integer')
   }
   if (created !== undefined && created > now + skew) {
-    fail('HTTP message signature was created in the future')
+    verificationFail('signature_time_invalid', 'HTTP message signature was created in the future')
   }
   if (expires !== undefined && expires < now - skew) {
-    fail('HTTP message signature has expired')
+    verificationFail('signature_time_invalid', 'HTTP message signature has expired')
   }
   if (created !== undefined && expires !== undefined && expires < created) {
-    fail('HTTP message signature expires before it was created')
+    verificationFail('signature_malformed', 'HTTP message signature expires before it was created')
   }
 
   if (policy.maxAge !== undefined) {
     if (created === undefined) {
-      fail('"policy.maxAge" requires the "created" signature parameter')
+      verificationFail(
+        'policy_rejected',
+        '"policy.maxAge" requires the "created" signature parameter',
+      )
     }
     if (now - created > policy.maxAge + skew) {
-      fail('HTTP message signature is older than policy permits')
+      verificationFail(
+        'signature_time_invalid',
+        'HTTP message signature is older than policy permits',
+      )
     }
   }
 }
@@ -5225,20 +5320,24 @@ function enforceVerificationAlgorithm(
   policy: NormalizedVerificationPolicy,
 ): void {
   if (!policy.algorithms.includes(algorithm)) {
-    fail(`Algorithm "${algorithm}" is not allowed by policy`)
+    verificationFail('policy_rejected', `Algorithm "${algorithm}" is not allowed by policy`)
   }
 
   const signaledAlgorithm = findSignatureParameterValue(signature.parameters, 'alg')
   if (signaledAlgorithm !== undefined && signaledAlgorithm !== algorithm) {
-    fail('The verifier algorithm does not match the "alg" signature parameter')
+    verificationFail(
+      'signature_malformed',
+      'The verifier algorithm does not match the "alg" signature parameter',
+    )
   }
 }
 
 /**
  * Verifies and applies explicit application policy to one HTTP message signature.
  *
- * The function throws on parse, policy, context, key-selection, algorithm, or cryptographic
- * failure. When multiple signatures are present, callers must select a label explicitly.
+ * Invalid configuration and provider contracts throw a `TypeError`. Parse, policy, context,
+ * key-selection, algorithm, and cryptographic failures throw {@link VerificationError}. When
+ * multiple signatures are present, callers must select a label explicitly.
  *
  * @example
  *
@@ -5315,23 +5414,41 @@ export async function verify(
   assertConfigurationObject(options, '"options"')
   assertSignatureContext(options)
   assertSignatureContextConfiguration(options)
-  const policy = snapshotVerificationPolicy(options.policy)
-  const captured = captureSignatureOperation(message, options)
-  const selected = selectSignature(captured.message, options.label)
-  for (const identifier of selected.input.components) {
-    validateComponentForMessage(identifier, captured.message)
+  if (options.label !== undefined) {
+    assertSfKey(options.label, 'Signature label')
   }
-  const serializedComponents = serializeCoveredComponents(selected.input.components)
+  const policy = snapshotVerificationPolicy(options.policy)
+  let captured: CapturedSignatureOperation
+  try {
+    captured = captureSignatureOperation(message, options)
+  } catch (cause) {
+    throw verificationError('signature_malformed', cause)
+  }
+  const selected = selectSignature(captured.message, options.label)
+  let serializedComponents: ReadonlyArray<string>
+  try {
+    for (const identifier of selected.input.components) {
+      validateComponentForMessage(identifier, captured.message)
+    }
+    serializedComponents = serializeCoveredComponents(selected.input.components)
+  } catch (cause) {
+    throw verificationError('signature_malformed', cause)
+  }
 
   const signature = cloneMessageSignature(selected.public)
   enforceVerificationPolicy(signature, policy)
-  const base = buildSignatureBase(
-    captured.message,
-    selected.input.components,
-    serializedComponents,
-    selected.input.parameters,
-    captured.context,
-  )
+  let base: string
+  try {
+    base = buildSignatureBase(
+      captured.message,
+      selected.input.components,
+      serializedComponents,
+      selected.input.parameters,
+      captured.context,
+    )
+  } catch (cause) {
+    throw verificationError('signature_malformed', cause)
+  }
   const context: VerificationContext = Object.freeze({
     message: captured.message,
     request: captured.context.request as RequestSnapshot | undefined,
@@ -5341,7 +5458,7 @@ export async function verify(
     cloneMessageSignature(signature),
     context,
   )
-  assertBindingUnchanged(captured.binding, 'verification')
+  assertVerificationBindingUnchanged(captured.binding)
   const algorithm = verifier.alg
   enforceVerificationAlgorithm(signature, algorithm, policy)
 
@@ -5349,25 +5466,29 @@ export async function verify(
   try {
     valid = await verifier.verify(encoder.encode(base), cloneBytes(selected.signature))
   } catch (cause) {
-    throw new Error('Failed to verify HTTP message signature', { cause })
+    throw verificationError('verification_failed', cause, 'Failed to verify HTTP message signature')
   }
   if (typeof valid !== 'boolean') {
     fail('Verifier output must be a boolean')
   }
-  assertBindingUnchanged(captured.binding, 'verification')
+  assertVerificationBindingUnchanged(captured.binding)
   if (!valid) {
-    throw new Error('HTTP message signature verification failed')
+    verificationFail('signature_mismatch', 'HTTP message signature verification failed')
   }
   enforceVerificationPolicy(signature, policy)
   if (policy.validate !== undefined) {
-    await policy.validate(
-      cloneMessageSignature(signature),
-      Object.freeze({ ...context, algorithm }),
-    )
-    assertBindingUnchanged(captured.binding, 'verification')
+    try {
+      await policy.validate(
+        cloneMessageSignature(signature),
+        Object.freeze({ ...context, algorithm }),
+      )
+    } catch (cause) {
+      throw verificationError('policy_rejected', cause)
+    }
+    assertVerificationBindingUnchanged(captured.binding)
     enforceVerificationPolicy(signature, policy)
   }
-  assertBindingUnchanged(captured.binding, 'verification')
+  assertVerificationBindingUnchanged(captured.binding)
   return { ...signature, algorithm }
 }
 

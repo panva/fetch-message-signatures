@@ -20,6 +20,7 @@ import {
   sign,
   token,
   verify,
+  VerificationError,
 } from '../index.ts'
 import type {
   ComponentIdentifier,
@@ -232,7 +233,7 @@ describe('signature field parsing and pairing', () => {
     )
   })
 
-  it('rejects missing or mismatched Signature and Signature-Input fields', () => {
+  it('rejects and classifies missing or mismatched signature fields', async () => {
     assert.throws(
       () => getSignatures(signedHeaders('sig1=("@method")', null)),
       /must both be present/,
@@ -241,6 +242,20 @@ describe('signature field parsing and pairing', () => {
     assert.throws(
       () => getSignatures(signedHeaders('sig1=("@method")', 'different=:AA==:')),
       /must contain identical labels/,
+    )
+    await assert.rejects(
+      verify(signedHeaders(null, null), {
+        verifier: webCryptoVerifier(),
+        policy: verificationPolicy(),
+      }),
+      { name: 'VerificationError', code: 'signature_missing' },
+    )
+    await assert.rejects(
+      verify(signedHeaders('sig1=("@method")', null), {
+        verifier: webCryptoVerifier(),
+        policy: verificationPolicy(),
+      }),
+      { name: 'VerificationError', code: 'signature_malformed' },
     )
   })
 })
@@ -286,9 +301,30 @@ describe('verifier factory contract', () => {
       await assert.rejects(
         verify(signed, { verifier, policy: verificationPolicy() }),
         (error: unknown) => {
-          assert.ok(error instanceof TypeError)
+          assert.ok(error instanceof VerificationError)
+          assert.equal(error.code, 'verification_failed')
           assert.equal(error.message, 'Invalid "verifier"')
           assert.equal((error.cause as Error).message, 'key service unavailable')
+          return true
+        },
+      )
+    }
+
+    for (const code of ['unknown_key', 'algorithm_unsupported'] as const) {
+      const signal = new VerificationError(code, `Factory reported ${code}`)
+      await assert.rejects(
+        verify(signed, {
+          verifier() {
+            throw signal
+          },
+          policy: verificationPolicy(),
+        }),
+        (error: unknown) => {
+          assert.ok(error instanceof VerificationError)
+          assert.notEqual(error, signal)
+          assert.equal(error.code, code)
+          assert.equal(error.message, signal.message)
+          assert.equal(error.cause, signal)
           return true
         },
       )
@@ -802,7 +838,7 @@ describe('multiple signatures', () => {
     )
     await assert.rejects(
       verify(second, { verifier: webCryptoVerifier(), policy: verificationPolicy() }),
-      /"label" is required/,
+      { name: 'TypeError', message: /"label" is required/ },
     )
     assert.equal(
       (
@@ -830,7 +866,11 @@ describe('multiple signatures', () => {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy(),
       }),
-      /does not contain signature label "missing"/,
+      {
+        name: 'VerificationError',
+        code: 'signature_missing',
+        message: /does not contain signature label "missing"/,
+      },
     )
   })
 
@@ -966,28 +1006,44 @@ describe('verification policy and timestamps', () => {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy({ requiredComponents: ['@path'] }),
       }),
-      /Required component "@path" is not covered/,
+      {
+        name: 'VerificationError',
+        code: 'policy_rejected',
+        message: /Required component "@path" is not covered/,
+      },
     )
     await assert.rejects(
       verify(signed, {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy({ requiredParameters: ['nonce'] }),
       }),
-      /Required signature parameter "nonce" is missing/,
+      {
+        name: 'VerificationError',
+        code: 'policy_rejected',
+        message: /Required signature parameter "nonce" is missing/,
+      },
     )
     await assert.rejects(
       verify(signed, {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy({ algorithms: ['ed25519'] }),
       }),
-      /Algorithm "hmac-sha256" is not allowed/,
+      {
+        name: 'VerificationError',
+        code: 'policy_rejected',
+        message: /Algorithm "hmac-sha256" is not allowed/,
+      },
     )
     await assert.rejects(
       verify(signed, {
         verifier: webCryptoVerifier(undefined, undefined, 'different-alg'),
         policy: verificationPolicy({ algorithms: ['different-alg', 'hmac-sha256'] }),
       }),
-      /does not match the "alg" signature parameter/,
+      {
+        name: 'VerificationError',
+        code: 'signature_malformed',
+        message: /does not match the "alg" signature parameter/,
+      },
     )
   })
 
@@ -1051,7 +1107,11 @@ describe('verification policy and timestamps', () => {
     const future = await policyFixture({ created: 1_100 })
     await assert.rejects(
       verify(future, { verifier: webCryptoVerifier(), policy: verificationPolicy({ now: 1_000 }) }),
-      /created in the future/,
+      {
+        name: 'VerificationError',
+        code: 'signature_time_invalid',
+        message: /created in the future/,
+      },
     )
     await assert.doesNotReject(
       verify(future, {
@@ -1066,7 +1126,7 @@ describe('verification policy and timestamps', () => {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy({ now: 1_000 }),
       }),
-      /has expired/,
+      { name: 'VerificationError', code: 'signature_time_invalid', message: /has expired/ },
     )
     await assert.doesNotReject(
       verify(expired, {
@@ -1081,7 +1141,11 @@ describe('verification policy and timestamps', () => {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy({ now: 1_000, clockSkew: 10 }),
       }),
-      /expires before it was created/,
+      {
+        name: 'VerificationError',
+        code: 'signature_malformed',
+        message: /expires before it was created/,
+      },
     )
 
     const old = await policyFixture({ created: 800 })
@@ -1090,7 +1154,11 @@ describe('verification policy and timestamps', () => {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy({ now: 1_000, maxAge: 199 }),
       }),
-      /older than policy permits/,
+      {
+        name: 'VerificationError',
+        code: 'signature_time_invalid',
+        message: /older than policy permits/,
+      },
     )
     await assert.doesNotReject(
       verify(old, {
@@ -1107,12 +1175,17 @@ describe('verification policy and timestamps', () => {
         verifier: webCryptoVerifier(),
         policy: verificationPolicy({ now: 1_000, maxAge: 10 }),
       }),
-      /requires the "created" signature parameter/,
+      {
+        name: 'VerificationError',
+        code: 'policy_rejected',
+        message: /requires the "created" signature parameter/,
+      },
     )
   })
 
   it('runs additional application policy after cryptographic verification', async () => {
     const signed = await policyFixture({ created: RFC_CREATED, nonce: 'not-seen-before' })
+    const policyCause = new VerificationError('unknown_key', 'replayed nonce')
     let verifiedCryptographically = false
     let verifiedMessage: object | undefined
     await assert.rejects(
@@ -1143,11 +1216,17 @@ describe('verification policy and timestamps', () => {
             )
             assert.equal(context.message, verifiedMessage)
             assert.equal(context.algorithm, 'hmac-sha256')
-            throw new Error('replayed nonce')
+            throw policyCause
           },
         }),
       }),
-      /replayed nonce/,
+      (error: unknown) => {
+        assert.ok(error instanceof VerificationError)
+        assert.equal(error.code, 'policy_rejected')
+        assert.equal(error.message, policyCause.message)
+        assert.equal(error.cause, policyCause)
+        return true
+      },
     )
     assert.equal(verifiedCryptographically, true)
   })
@@ -1171,7 +1250,11 @@ describe('verification policy and timestamps', () => {
           },
         }),
       }),
-      /HTTP message signature verification failed/,
+      {
+        name: 'VerificationError',
+        code: 'signature_mismatch',
+        message: /HTTP message signature verification failed/,
+      },
     )
     assert.equal(policyCalled, false)
   })

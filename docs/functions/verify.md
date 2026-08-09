@@ -4,8 +4,9 @@
 
 Verifies and applies explicit application policy to one HTTP message signature.
 
-The function throws on parse, policy, context, key-selection, algorithm, or cryptographic
-failure. When multiple signatures are present, callers must select a label explicitly.
+Invalid configuration and provider contracts throw a `TypeError`. Parse, policy, context,
+key-selection, algorithm, and cryptographic failures throw [VerificationError](../classes/VerificationError.md). When
+multiple signatures are present, callers must select a label explicitly.
 
 ## Parameters
 

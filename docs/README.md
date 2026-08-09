@@ -25,7 +25,9 @@ const verifyWithKey = FetchSig.ed25519Verifier(publicKey)
 
 const verifier: FetchSig.VerifierFactory = (signature, context) => {
   const keyid = FetchSig.getSignatureParameter(signature, 'keyid')
-  if (keyid !== 'example-key') throw new Error('Untrusted signing key')
+  if (keyid !== 'example-key') {
+    throw new FetchSig.VerificationError('unknown_key', 'Unknown signing key')
+  }
   return verifyWithKey(signature, context)
 }
 
@@ -103,8 +105,9 @@ plus a `verify` block, and checks the response against the exact request that pr
 
 ## Recipient
 
-| Function | Description |
+| Name | Description |
 | :------ | :------ |
+| [VerificationError](classes/VerificationError.md) | An HTTP message signature verification failure. |
 | [getSignatureParameter](functions/getSignatureParameter.md) | Returns one signature metadata parameter by name, or `undefined` when the signature omits it. |
 | [getSignatures](functions/getSignatures.md) | Parses and pairs every signature carried by a message, so that an application can choose which label to verify. |
 | [parseSignature](functions/parseSignature.md) | Parses a `Signature` field value into its labeled signature byte sequences. |
@@ -225,4 +228,5 @@ plus a `verify` block, and checks the response against the exact request that pr
 | [StructuredFieldType](type-aliases/StructuredFieldType.md) | The top-level type of an HTTP Structured Field. |
 | [StructuredFieldValue](type-aliases/StructuredFieldValue.md) | A complete Structured Field value of one of the three top-level types. |
 | [SynchronousVerifierFactory](type-aliases/SynchronousVerifierFactory.md) | A [VerifierFactory](type-aliases/VerifierFactory.md) that resolves its verifier without suspending. |
+| [VerificationErrorCode](type-aliases/VerificationErrorCode.md) | Stable machine-readable reasons why HTTP message signature verification failed. |
 | [VerifierFactory](type-aliases/VerifierFactory.md) | A factory that selects trusted verification key material and an algorithm. |
