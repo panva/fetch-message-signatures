@@ -13,6 +13,7 @@ import {
   ecdsaP384Sha384Verifier,
   generateEcdsaP384Sha384KeyPair,
   type MessageSignature,
+  type VerificationContext,
 } from '../index.ts'
 
 // Kept out of test/algorithms.ts so that the rest of that file stays portable: it is the only case
@@ -25,7 +26,14 @@ const providerSignature: MessageSignature = {
   parameters: [],
   signature: new Uint8Array(),
 }
-const providerContext = { message: new Request('https://example.com/') }
+const providerContext = Object.freeze({
+  message: Object.freeze({
+    method: 'GET',
+    url: 'https://example.com/',
+    headers: Object.freeze({}),
+    trailers: Object.freeze({}),
+  }),
+}) satisfies VerificationContext
 const message = new TextEncoder().encode('HTTP Message Signatures')
 
 describe('node:crypto interoperability', () => {

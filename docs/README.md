@@ -168,11 +168,12 @@ plus a `verify` block, and checks the response against the exact request that pr
 | :------ | :------ |
 | [CryptoKeyPair](interfaces/CryptoKeyPair.md) | A Web Cryptography key pair, resolved from the host runtime the same way [CryptoKey](type-aliases/CryptoKey.md) is. |
 | [CryptoKeyStructuralFallback](interfaces/CryptoKeyStructuralFallback.md) | Used as [CryptoKey](type-aliases/CryptoKey.md) when the host runtime's `crypto` global is not exposed on `typeof globalThis`, including when it is absent from ambient types or declared with `const` or `let`. It stays structurally compatible with host `CryptoKey` declarations. |
-| [FieldValueContext](interfaces/FieldValueContext.md) | Context supplied while deriving HTTP message components. |
 | [MessageComponent](interfaces/MessageComponent.md) | A normalized HTTP message component identifier with ordered parameters. |
 | [MessageSignature](interfaces/MessageSignature.md) | A parsed HTTP message signature. |
 | [ParameterizedComponent](interfaces/ParameterizedComponent.md) | A parameterized HTTP message component identifier. |
 | [RequestedSignOptions](interfaces/RequestedSignOptions.md) | Options for fulfilling an `Accept-Signature` member. |
+| [RequestSnapshot](interfaces/RequestSnapshot.md) | An immutable request snapshot supplied to verification callbacks. |
+| [ResponseSnapshot](interfaces/ResponseSnapshot.md) | An immutable response snapshot supplied to verification callbacks. |
 | [SignatureBaseOptions](interfaces/SignatureBaseOptions.md) | Options for direct signature-base creation. |
 | [SignatureContext](interfaces/SignatureContext.md) | Options shared by signature-base creation, signing, and verification. |
 | [SignatureFields](interfaces/SignatureFields.md) | The result of creating one signature, ready to be added to the corresponding HTTP fields. |
@@ -206,10 +207,9 @@ plus a `verify` block, and checks the response against the exact request that pr
 | [ComponentParameters](type-aliases/ComponentParameters.md) | Ordered parameters are recommended because their serialization order is covered by the signature. Object property insertion order is preserved when a record is supplied. |
 | [ComponentParameterValue](type-aliases/ComponentParameterValue.md) | A value supported by an HTTP message component parameter. |
 | [CryptoKey](type-aliases/CryptoKey.md) | A Web Cryptography key, resolved from the host runtime. |
-| [FieldValues](type-aliases/FieldValues.md) | Supplies individual HTTP field occurrences in wire order. |
+| [FieldOccurrences](type-aliases/FieldOccurrences.md) | Immutable HTTP field occurrences indexed by lowercase field name, in their received order. |
 | [HeadersInput](type-aliases/HeadersInput.md) | HTTP fields supplied to a reading operation. |
-| [NormalizedMessage](type-aliases/NormalizedMessage.md) | A [SignableRequest](type-aliases/SignableRequest.md) or [SignableResponse](type-aliases/SignableResponse.md) whose fields use the host's `Headers` representation. This is an application-processing view, not an occurrence-preserving view. |
-| [NormalizedRequest](type-aliases/NormalizedRequest.md) | A [SignableRequest](type-aliases/SignableRequest.md) whose fields use the host's `Headers` representation. |
+| [MessageSnapshot](type-aliases/MessageSnapshot.md) | A package-owned request or response snapshot. |
 | [SignableRequest](type-aliases/SignableRequest.md) | A request this package can read components from. |
 | [SignableResponse](type-aliases/SignableResponse.md) | A response this package can read components from. |
 | [SignatureParameter](type-aliases/SignatureParameter.md) | An ordered signature metadata parameter. |

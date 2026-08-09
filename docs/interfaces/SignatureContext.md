@@ -6,7 +6,6 @@ Options shared by signature-base creation, signing, and verification.
 
 - [Extended by](#extended-by)
 - [Properties](#properties)
-  - [fieldValues?](#fieldvalues)
   - [request?](#request)
   - [structuredFields?](#structuredfields)
 
@@ -18,14 +17,6 @@ Options shared by signature-base creation, signing, and verification.
 - [`RequestedSignOptions`](RequestedSignOptions.md)
 
 ## Properties
-
-### fieldValues?
-
-> `readonly` `optional` **fieldValues?**: [`FieldValues`](../type-aliases/FieldValues.md)
-
-Adapter for raw field occurrences and trailers.
-
-***
 
 ### request?
 

@@ -27,10 +27,12 @@ When both copies must remain independently readable, choose an application-speci
 
 The pure creation functions do not inspect, consume, or hash a body.
 
-Signing and verification snapshot observable headers and reconstruct the signature base around
-asynchronous provider calls. They reject if the target message, related request, raw field adapter,
-or trailer context changes during the operation. Keep those inputs stable until the Promise settles.
-A `fieldValues` adapter must return a deterministic view of the same message.
+Signing and verification capture the target message and related request once at invocation. The
+package-owned snapshot freezes the routing properties and separate header and trailer occurrences
+used to construct the signature base. Verification callbacks all receive that same snapshot. The
+source is compared with it after application callbacks run, and the operation is rejected if an
+observable value changed. Keep the source message and related request stable until the Promise
+settles.
 
 ## Response metadata
 
@@ -76,13 +78,25 @@ There is no generic way for a Fetch wrapper to do all of this without applicatio
 ## Repeated field lines
 
 `Headers` normally combines repeated field lines. RFC 9421's `bs` parameter signs each occurrence
-separately, so `bs` requires a `fieldValues` adapter with the original occurrence list.
+separately, so a combined `Headers` value does not carry enough information. Supply a plain message
+descriptor and put the original occurrences in an array instead:
+
+```ts
+const request: FetchSig.SignableRequest = {
+  method: 'GET',
+  url: 'https://api.example/',
+  headers: { 'x-example': ['first field line', 'second field line'] },
+}
+```
+
+The array order is the field-line order. A string value is one known occurrence. Both forms are
+captured in the immutable operation snapshot before a signature base is built.
 
 The exception is `set-cookie` in runtimes that expose `Headers.getSetCookie()`. In those runtimes
 the implementation can retrieve the occurrences directly. That covers Node.js, Deno, Bun, and
 Cloudflare Workers, but not browsers: a browser strips `set-cookie` from requests and hides it on
-responses, so the field reads as absent there and `set-cookie` coverage needs a `fieldValues`
-adapter or a signing point outside the browser.
+responses, so the field reads as absent there. Covering it requires a descriptor populated at a
+layer that can observe the occurrences, or a signing point outside the browser.
 
 An intermediary is allowed to recombine repeated field lines with any amount of whitespace around
 the commas. That changes the combined value, and therefore the signature base, without changing what
@@ -98,9 +112,11 @@ rather than as `U+00C3 U+00A9`, and a byte that is not valid UTF-8 is replaced w
 destroying it. Node.js, Deno, Bun, and browsers all behave as the specification requires. This is
 tracked as [workerd#6927](https://github.com/cloudflare/workerd/issues/6927).
 
-Because the received octets cannot be recovered from the decoded string, supply `fieldValues` with
-the raw octets when a non-ASCII field value has to be signed on Cloudflare Workers. ASCII field
-values, which is what RFC 9110 recommends and what nearly all fields use, are unaffected.
+Because the received octets cannot be recovered from the decoded string, a non-ASCII field that has
+already passed through Cloudflare Workers' `Headers` cannot be signed faithfully. A transport layer
+that still has the bytes can construct a plain descriptor whose occurrence strings map each byte to
+the same-numbered code unit. ASCII field values, which is what RFC 9110 recommends and what nearly
+all fields use, are unaffected.
 
 Cloudflare Workers also accepts a field value containing code units above `U+00FF`, storing `'☃'` as
 `U+2603` where the `ByteString` conversion is required to throw a `TypeError`
@@ -110,16 +126,25 @@ code unit is at most `U+00FF`, as the other runtimes enforce for you.
 
 ## Trailers
 
-Fetch does not generally expose HTTP trailers. A component with `tr` requires a `fieldValues`
-adapter supplied by a transport integration.
+Fetch does not generally expose HTTP trailers. A transport integration that has them supplies a
+plain descriptor with a separate `trailers` record:
+
+```ts
+const response: FetchSig.SignableResponse = {
+  status: 200,
+  headers: { 'content-type': 'application/json' },
+  trailers: { 'content-digest': ['sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:'] },
+}
+```
 
 Standard Fetch also cannot discover trailer-carried `Signature-Input` and `Signature` fields. The
-adapter covers component value derivation, not transport of the signature fields themselves.
+descriptor's `trailers` record covers component value derivation, not transport or discovery of the
+signature fields themselves.
 
-The adapter must expose header and trailer occurrences separately. If the same field name occurs in
-both sections, branch on `context.trailers` and never return a combined list: RFC 9421 requires the
-two values to be signed separately. Trailer coverage is not recommended unless both endpoints and
-every relevant intermediary preserve access to the trailer values as sent.
+Keep header and trailer occurrences in their respective records even when both sections contain the
+same field name: RFC 9421 requires the two values to be signed separately. Trailer coverage is not
+recommended unless both endpoints and every relevant intermediary preserve access to the trailer
+values as sent.
 
 ## Structured Fields
 
@@ -224,9 +249,9 @@ pipeline. Use `createSignedFetch()` when both operations are required. Nesting t
 wrappers can bind verification to a different request object or reconstruct a streaming request an
 extra time.
 
-All three accept the normal Fetch input and init arguments, construct a request from them, and force
-manual redirects when needed. A signing wrapper then replaces that request with the newly signed
-request.
+All three accept the normal Fetch input and init arguments, construct a request from them, and
+change automatic redirect following to manual handling. A signing wrapper then replaces that request
+with the newly signed request.
 
 Reconstructing a request resets some of it. The Fetch constructor sets the referrer to `client` and
 the referrer policy to the empty string whenever the initializer is not empty, so every

@@ -7,7 +7,6 @@ Options for fulfilling an `Accept-Signature` member.
 - [Extends](#extends)
 - [Properties](#properties)
   - [signer](#signer)
-  - [fieldValues?](#fieldvalues)
   - [now?](#now)
   - [parameters?](#parameters)
   - [request?](#request)
@@ -22,18 +21,6 @@ Options for fulfilling an `Accept-Signature` member.
 ### signer
 
 > `readonly` **signer**: [`SignerFactory`](../type-aliases/SignerFactory.md)
-
-***
-
-### fieldValues?
-
-> `readonly` `optional` **fieldValues?**: [`FieldValues`](../type-aliases/FieldValues.md)
-
-Adapter for raw field occurrences and trailers.
-
-#### Inherited from
-
-[`SignatureContext`](SignatureContext.md).[`fieldValues`](SignatureContext.md#fieldvalues)
 
 ***
 

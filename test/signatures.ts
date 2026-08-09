@@ -21,7 +21,12 @@ import {
   token,
   verify,
 } from '../index.ts'
-import type { ComponentIdentifier, VerificationPolicy, VerifierFactory } from '../index.ts'
+import type {
+  ComponentIdentifier,
+  RequestSnapshot,
+  VerificationPolicy,
+  VerifierFactory,
+} from '../index.ts'
 import {
   bytesToBase64,
   REQUEST_CARRIES_FORBIDDEN_FIELDS,
@@ -41,6 +46,25 @@ function signedHeaders(signatureInput: string | null, signature: string | null):
     headers.set('signature', signature)
   }
   return new Request('https://example.com/', { headers })
+}
+
+function assertRequestSnapshot(
+  snapshot: RequestSnapshot | undefined,
+  request: Request,
+): asserts snapshot is RequestSnapshot {
+  assert.ok(snapshot)
+  assert.notEqual(snapshot, request)
+  assert.equal(snapshot.method, request.method)
+  assert.equal(snapshot.url, request.url)
+  assert.ok(Object.isFrozen(snapshot))
+  assert.ok(Object.isFrozen(snapshot.headers))
+  assert.ok(Object.isFrozen(snapshot.trailers))
+  assert.equal(Object.getPrototypeOf(snapshot.headers), null)
+  assert.equal(Object.getPrototypeOf(snapshot.trailers), null)
+  for (const [name, value] of request.headers) {
+    assert.deepEqual(snapshot.headers[name], [value])
+    assert.ok(Object.isFrozen(snapshot.headers[name]))
+  }
 }
 
 describe('signature field parsing and pairing', () => {
@@ -183,21 +207,23 @@ describe('signature field parsing and pairing', () => {
     )
 
     assert.equal(
-      createSignatureBase(request, {
-        components: [
-          component('example', { key: 'a' }),
-          component('example', [
-            ['key', 'a'],
-            ['tr', true],
-          ]),
-        ],
-        fieldValues(_message, name, context) {
-          if (name === 'example') {
-            return [context.trailers ? 'a=3' : 'a=1']
-          }
-          return undefined
+      createSignatureBase(
+        {
+          method: 'GET',
+          url: 'https://example.com/',
+          headers: { example: 'a=1' },
+          trailers: { example: 'a=3' },
         },
-      }),
+        {
+          components: [
+            component('example', { key: 'a' }),
+            component('example', [
+              ['key', 'a'],
+              ['tr', true],
+            ]),
+          ],
+        },
+      ),
       [
         '"example";key="a": 1',
         '"example";key="a";tr: 3',
@@ -725,7 +751,7 @@ describe('covered component inspection', () => {
     const requireCoverageWhenPresent = (field: string): VerificationPolicy =>
       policy((signature, context) => {
         if (
-          context.message.headers.has(field) &&
+          Object.hasOwn(context.message.headers, field) &&
           findComponents(signature.components, field).length === 0
         ) {
           throw new Error(`A present ${field} field must be covered`)
@@ -1088,10 +1114,18 @@ describe('verification policy and timestamps', () => {
   it('runs additional application policy after cryptographic verification', async () => {
     const signed = await policyFixture({ created: RFC_CREATED, nonce: 'not-seen-before' })
     let verifiedCryptographically = false
+    let verifiedMessage: object | undefined
     await assert.rejects(
       verify(signed, {
         verifier(_signature, context) {
-          assert.equal(context.message, signed)
+          assert.notEqual(context.message, signed)
+          assert.ok('method' in context.message)
+          assert.equal(context.message.method, signed.method)
+          assert.equal(context.message.url, signed.url)
+          assert.ok(Object.isFrozen(context.message))
+          assert.ok(Object.isFrozen(context.message.headers))
+          assert.ok(Object.isFrozen(context.message.trailers))
+          verifiedMessage = context.message
           assert.equal(context.request, undefined)
           return {
             alg: 'hmac-sha256',
@@ -1107,7 +1141,7 @@ describe('verification policy and timestamps', () => {
               signature.parameters.find(([name]) => name === 'nonce')?.[1],
               'not-seen-before',
             )
-            assert.equal(context.message, signed)
+            assert.equal(context.message, verifiedMessage)
             assert.equal(context.algorithm, 'hmac-sha256')
             throw new Error('replayed nonce')
           },
@@ -1275,7 +1309,7 @@ describe('fetch wrappers', () => {
     const verifyingFetch = createVerifyingFetch({
       verify: {
         verifier(signature, context) {
-          assert.equal(context.request, observed)
+          assertRequestSnapshot(context.request, observed)
           return verifier(signature, context)
         },
         policy: verificationPolicy({ requiredComponents: components }),
@@ -1314,7 +1348,7 @@ describe('fetch wrappers', () => {
       },
       verify: {
         verifier(signature, context) {
-          assert.equal(context.request, observed)
+          assertRequestSnapshot(context.request, observed)
           return verifier(signature, context)
         },
         policy: verificationPolicy({ requiredComponents: responseComponents }),

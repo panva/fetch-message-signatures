@@ -24,8 +24,7 @@ const verifier: FetchSig.VerifierFactory = (signature, context) => {
     throw new Error('Unknown signing key')
   }
 
-  // `instanceof` would miss a message supplied as a plain object, so the request is recognised by
-  // the property only a request-shaped message has.
+  // A request snapshot is the variant carrying `method` and `url`.
   if (
     'method' in context.message &&
     new URL(context.message.url).origin !== 'https://api.example'
@@ -45,12 +44,14 @@ const verifier: FetchSig.VerifierFactory = (signature, context) => {
 The factory may return a Promise, so a key that has to be fetched or refreshed on rotation can be
 awaited there. Resolve it through a local trust store, a cache, or a discovery endpoint fixed by
 configuration. Never fetch an arbitrary URL merely because it appeared in an unverified `keyid`. The
-signature base is rebuilt after the factory settles, so a message that changes while a key is being
-fetched is rejected rather than verified.
+original message is compared with the operation snapshot after the factory settles, so a change
+while a key is being fetched is rejected rather than verified.
 
-`context.message` is the target message. `context.request` is the related request when the target is
-a response. Use this context to prevent a valid key from being accepted outside its authorized
-tenant, origin, route, or message direction.
+`context.message` is a package-owned immutable snapshot of the target message. `context.request` is
+the related-request snapshot when the target is a response. Header and trailer names are lowercase,
+their values are frozen occurrence arrays, and every verifier and policy callback for the operation
+sees the same snapshot values. Use this context to prevent a valid key from being accepted outside
+its authorized tenant, origin, route, or message direction.
 
 ## Define explicit policy
 
@@ -76,7 +77,7 @@ const verified = await FetchSig.verify(request, {
   },
 })
 
-declare function claimNonceOnce(nonce: string, message: FetchSig.NormalizedMessage): Promise<void>
+declare function claimNonceOnce(nonce: string, message: FetchSig.MessageSnapshot): Promise<void>
 
 console.log(verified.algorithm)
 ```
@@ -87,9 +88,7 @@ parameter order. Every entry must be covered, so a rule that is not a plain conj
 identifier match there, against `signature.components`:
 
 ```ts
-declare const target: Request
-
-const requireTargetBinding: FetchSig.VerificationPolicy['validate'] = (signature) => {
+const requireTargetBinding: FetchSig.VerificationPolicy['validate'] = (signature, context) => {
   const covered = signature.components
   if (
     !FetchSig.includesComponent(covered, '@authority') &&
@@ -98,7 +97,7 @@ const requireTargetBinding: FetchSig.VerificationPolicy['validate'] = (signature
     throw new Error('The signature must cover @authority or @target-uri')
   }
   if (
-    target.headers.has('signature-agent') &&
+    context.message.headers['signature-agent'] !== undefined &&
     !FetchSig.includesComponent(covered, 'signature-agent')
   ) {
     throw new Error('An unsigned signature-agent field is not accepted')
@@ -191,9 +190,9 @@ const verifyingFetch = FetchSig.createVerifyingFetch({
 const response = await verifyingFetch('https://api.example/orders')
 ```
 
-The wrapper forces manual redirects because Fetch does not expose the exact request that produced a
-response after following a redirect. Use `createSignedFetch()` rather than nesting directional
-wrappers when requests must also be signed.
+The wrapper changes automatic redirect following to manual handling because Fetch does not expose
+the exact request that produced a response after following a redirect. Use `createSignedFetch()`
+rather than nesting directional wrappers when requests must also be signed.
 
 ## Select among multiple signatures
 

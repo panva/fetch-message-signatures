@@ -49,7 +49,7 @@ const verified = await FetchSig.verify(request, {
 
 declare function claimNonceOnce(
   nonce: string,
-  message: FetchSig.NormalizedMessage,
+  message: FetchSig.MessageSnapshot,
 ): Promise<void>
 
 // ed25519 [ [ 'created', 1735689600 ], [ 'keyid', 'client-key' ], [ 'nonce', '…' ] ]

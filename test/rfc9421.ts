@@ -331,19 +331,18 @@ describe('response signatures bound to the related request', () => {
 
 describe('RFC 9421 Section 2 component value examples', () => {
   // The verbatim worked examples from Sections 2.1 through 2.2.8, which the Appendix B vectors do
-  // not reach. Field lines that Fetch cannot represent are supplied through the fieldValues adapter.
-  const request = () => new Request('https://www.example.com/')
+  // not reach. Field lines that Fetch cannot represent are supplied as explicit descriptor
+  // occurrences.
 
   function base(
     components: Parameters<typeof createSignatureBase>[1]['components'],
     fields: Readonly<Record<string, ReadonlyArray<string>>>,
     structuredFields?: Parameters<typeof createSignatureBase>[1]['structuredFields'],
   ): string[] {
-    const lines = createSignatureBase(request(), {
-      components,
-      structuredFields,
-      fieldValues: (_message, name, context) => (context.trailers ? undefined : fields[name]),
-    }).split('\n')
+    const lines = createSignatureBase(
+      { method: 'GET', url: 'https://www.example.com/', headers: fields },
+      { components, structuredFields },
+    ).split('\n')
     // Drop the "@signature-params" line, because these vectors are about component values.
     return lines.slice(0, -1)
   }
@@ -417,18 +416,13 @@ describe('RFC 9421 Section 2 component value examples', () => {
   })
 
   it('reads a trailer field with "tr", per Section 2.1.4', () => {
-    const response = new Response('HTTPMessageSignatures', {
+    const response = {
       status: 200,
       headers: { 'content-type': 'text/plain', trailer: 'Expires' },
-    })
+      trailers: { expires: ['Wed, 9 Nov 2022 07:28:00 GMT'] },
+    }
     const lines = createSignatureBase(response, {
       components: ['@status', 'trailer', component('expires', [['tr', true]])],
-      fieldValues: (_message, name, context) => {
-        if (context.trailers) {
-          return name === 'expires' ? ['Wed, 9 Nov 2022 07:28:00 GMT'] : undefined
-        }
-        return name === 'trailer' ? ['Expires'] : undefined
-      },
     }).split('\n')
     assert.deepEqual(lines.slice(0, -1), [
       '"@status": 200',

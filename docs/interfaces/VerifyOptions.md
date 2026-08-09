@@ -8,7 +8,6 @@ Recipient options.
 - [Properties](#properties)
   - [policy](#policy)
   - [verifier](#verifier)
-  - [fieldValues?](#fieldvalues)
   - [label?](#label)
   - [request?](#request)
   - [structuredFields?](#structuredfields)
@@ -28,18 +27,6 @@ Recipient options.
 ### verifier
 
 > `readonly` **verifier**: [`VerifierFactory`](../type-aliases/VerifierFactory.md)
-
-***
-
-### fieldValues?
-
-> `readonly` `optional` **fieldValues?**: [`FieldValues`](../type-aliases/FieldValues.md)
-
-Adapter for raw field occurrences and trailers.
-
-#### Inherited from
-
-[`SignatureContext`](SignatureContext.md).[`fieldValues`](SignatureContext.md#fieldvalues)
 
 ***
 

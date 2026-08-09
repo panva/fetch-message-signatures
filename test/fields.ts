@@ -68,30 +68,24 @@ describe('HTTP field component canonicalization', () => {
   })
 
   it('binary-wraps each raw field occurrence with ;bs', () => {
-    const request = new Request('https://example.com/', {
-      headers: { example: 'Fetch-combined value' },
-    })
-    const calls: unknown[] = []
+    const request = {
+      method: 'GET',
+      url: 'https://example.com/',
+      headers: { example: [' first ', `second\u00ff`] },
+    }
     assert.equal(
-      createSignatureBase(request, {
-        components: [component('example', { bs: true })],
-        fieldValues(message, name, context) {
-          calls.push([message, name, context])
-          return [' first ', `second\u00ff`]
-        },
-      }),
+      createSignatureBase(request, { components: [component('example', { bs: true })] }),
       ['"example";bs: :Zmlyc3Q=:, :c2Vjb25k/w==:', '"@signature-params": ("example";bs)'].join(
         '\n',
       ),
     )
-    assert.deepEqual(calls, [[request, 'example', { trailers: false, relatedRequest: false }]])
   })
 
-  it('requires a raw-occurrence adapter for ;bs under Fetch', () => {
+  it('requires explicit field occurrences for ;bs under Fetch', () => {
     const request = new Request('https://example.com/', { headers: { example: 'value' } })
     assert.throws(
       () => createSignatureBase(request, { components: [component('example', { bs: true })] }),
-      /"example";bs requires "fieldValues"/,
+      /explicit field occurrences/,
     )
 
     const headers = new Headers({ 'set-cookie': 'a=1, b=2' }) as Headers & {
@@ -108,7 +102,7 @@ describe('HTTP field component canonicalization', () => {
         createSignatureBase(withoutGetSetCookie, {
           components: [component('set-cookie', { bs: true })],
         }),
-      /"set-cookie";bs requires "fieldValues"/,
+      /explicit field occurrences/,
     )
   })
 
@@ -132,9 +126,14 @@ describe('HTTP field component canonicalization', () => {
     )
   })
 
-  it('uses trailer and related-request context supplied by fieldValues', () => {
-    const request = new Request('https://example.com/', { headers: { example: 'request header' } })
-    const response = new Response(null, { status: 204 })
+  it('uses explicit trailer occurrences from a related request descriptor', () => {
+    const request = {
+      method: 'GET',
+      url: 'https://example.com/',
+      headers: { example: 'request header' },
+      trailers: { example: ['trailer value'] },
+    }
+    const response = { status: 204, headers: {} }
     assert.equal(
       createSignatureBase(response, {
         request,
@@ -144,26 +143,19 @@ describe('HTTP field component canonicalization', () => {
             ['req', true],
           ]),
         ],
-        fieldValues(message, name, context) {
-          assert.equal(message, request)
-          assert.equal(name, 'example')
-          assert.deepEqual(context, { trailers: true, relatedRequest: true })
-          return ['trailer value']
-        },
       }),
       ['"example";tr;req: trailer value', '"@signature-params": ("example";tr;req)'].join('\n'),
     )
   })
 
   it('normalizes occurrences in wire order and rejects absent fields', () => {
-    const request = new Request('https://example.com/')
+    const request = {
+      method: 'GET',
+      url: 'https://example.com/',
+      headers: { 'cache-control': [' max-age=60 ', '\tmust-revalidate\t'] },
+    }
     assert.equal(
-      createSignatureBase(request, {
-        components: ['cache-control'],
-        fieldValues() {
-          return [' max-age=60 ', '\tmust-revalidate\t']
-        },
-      }),
+      createSignatureBase(request, { components: ['cache-control'] }),
       [
         '"cache-control": max-age=60, must-revalidate',
         '"@signature-params": ("cache-control")',
@@ -175,13 +167,15 @@ describe('HTTP field component canonicalization', () => {
     )
     assert.throws(
       () =>
-        createSignatureBase(request, {
-          components: ['example'],
-          fieldValues() {
-            return ['invalid\u0000value']
+        createSignatureBase(
+          {
+            method: 'GET',
+            url: 'https://example.com/',
+            headers: { example: ['invalid\u0000value'] },
           },
-        }),
-      /invalid control character/,
+          { components: ['example'] },
+        ),
+      /invalid control character|invalid header value/i,
     )
   })
 

@@ -95,7 +95,7 @@ metadata such as `url`, `redirected`, and `type` cannot be preserved.
 
 ## Call Signature
 
-> **appendSignature**(`headers`, `fields`): `Request` ∣ `Response` ∣ `Headers`
+> **appendSignature**(`headers`, `fields`): `Request` ∣ `Headers` ∣ `Response`
 
 Adds one signature to a target whose type is not known statically.
 
@@ -103,9 +103,9 @@ Adds one signature to a target whose type is not known statically.
 
 | Parameter | Type |
 | :------ | :------ |
-| `headers` | `Request` ∣ `Response` ∣ `Headers` |
+| `headers` | `Request` ∣ `Headers` ∣ `Response` |
 | `fields` | [`SignatureFields`](../interfaces/SignatureFields.md) |
 
 ### Returns
 
-`Request` ∣ `Response` ∣ `Headers`
+`Request` ∣ `Headers` ∣ `Response`

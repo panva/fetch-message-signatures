@@ -62,19 +62,14 @@ const LINE_PREFIX = '"example";sf: '
  * Parses the corpus field lines as the given Structured Field type and returns the strict
  * re-serialization that would appear in a signature base.
  *
- * The lines are supplied through a `fieldValues` adapter rather than through `Headers`, because the
- * corpus deliberately includes values that a Fetch `Headers` object refuses to hold.
+ * The lines are supplied as explicit descriptor occurrences rather than through `Headers`, because
+ * the corpus deliberately includes values that a Fetch `Headers` object refuses to hold.
  */
 function canonicalize(lines: ReadonlyArray<string>, type: StructuredFieldType): string {
-  const message = {
-    method: 'GET',
-    url: 'https://example.com/',
-    headers: new Headers(),
-  } as unknown as Request
+  const message = { method: 'GET', url: 'https://example.com/', headers: { example: lines } }
   const base = createSignatureBase(message, {
     components: [COMPONENT],
     structuredFields: { example: type },
-    fieldValues: () => lines,
   })
   const line = base.slice(0, base.indexOf('\n'))
   assert.ok(line.startsWith(LINE_PREFIX), `unexpected signature base line: ${line}`)
@@ -83,11 +78,7 @@ function canonicalize(lines: ReadonlyArray<string>, type: StructuredFieldType): 
 
 /** Serializes signature metadata parameters and returns just the serialized parameter list. */
 function serializeParameters(parameters: SignatureParameters): string {
-  const message = {
-    method: 'GET',
-    url: 'https://example.com/',
-    headers: new Headers(),
-  } as unknown as Request
+  const message = { method: 'GET', url: 'https://example.com/', headers: {} }
   const base = createSignatureBase(message, { components: [], parameters })
   return base.slice(base.indexOf('()') + '()'.length)
 }

@@ -32,6 +32,7 @@ import type {
   SynchronousVerifierFactory,
   VerificationPolicy,
   VerifierFactory,
+  RequestSnapshot,
 } from '../index.ts'
 import {
   bytesToBase64,
@@ -59,6 +60,27 @@ function requestFixture(): Request {
   return new Request('https://example.com:8443/path/to/resource?Pet=dog#fragment', {
     method: 'PATCH',
     headers: { 'content-type': 'application/json', 'x-covered': 'original', 'x-uncovered': 'free' },
+  })
+}
+
+function descriptorFixture(
+  headers: Readonly<Record<string, string | ReadonlyArray<string> | undefined>> = {},
+  trailers?: Readonly<Record<string, string | ReadonlyArray<string> | undefined>>,
+) {
+  return {
+    method: 'PATCH',
+    url: 'https://example.com:8443/path/to/resource?Pet=dog#fragment',
+    headers,
+    trailers,
+  }
+}
+
+function requestSnapshotFixture(): RequestSnapshot {
+  return Object.freeze({
+    method: 'PATCH',
+    url: 'https://example.com:8443/path/to/resource?Pet=dog#fragment',
+    headers: Object.freeze({}),
+    trailers: Object.freeze({}),
   })
 }
 
@@ -383,15 +405,10 @@ describe('derived-component and field boundaries', () => {
     )
   })
 
-  it('normalizes obsolete line folding supplied by a raw-field adapter', () => {
-    const request = new Request('https://example.com/')
+  it('normalizes obsolete line folding supplied by a message descriptor', () => {
+    const request = descriptorFixture({ example: [' first\r\n\tcontinued ', ' second '] })
     assert.equal(
-      createSignatureBase(request, {
-        components: ['example'],
-        fieldValues() {
-          return [' first\r\n\tcontinued ', ' second ']
-        },
-      }),
+      createSignatureBase(request, { components: ['example'] }),
       ['"example": first continued, second', '"@signature-params": ("example")'].join('\n'),
     )
   })
@@ -407,17 +424,21 @@ describe('derived-component and field boundaries', () => {
 
   it('rejects an unserializable identifier before it reads the message', () => {
     // RFC 9421 Section 2.5 serializes the identifier before deriving its value. Resolving first
-    // would report a message-dependent error for a caller input error, and would run the adapter.
+    // would report a message-dependent error for a caller input error, and would read the message.
     let calls = 0
+    const headers = Object.create(null) as Record<string, string>
+    Object.defineProperty(headers, 'x-dict', {
+      enumerable: true,
+      get() {
+        calls++
+        return 'a=1'
+      },
+    })
 
     assert.throws(
       () =>
-        createSignatureBase(requestFixture(), {
+        createSignatureBase(descriptorFixture(headers), {
           components: [component('x-dict', { key: '\u00e9' })],
-          fieldValues() {
-            calls++
-            return ['a=1']
-          },
         }),
       /Structured Field String must contain only printable ASCII characters/,
     )
@@ -428,17 +449,14 @@ describe('derived-component and field boundaries', () => {
     // The signature base is ASCII, so a plain field value carrying \xff cannot appear in it. Under
     // ;bs the same octet is signed as base64, which is why the check runs per resolved value rather
     // than once over the assembled base.
-    const fieldValues = () => ['\xff']
+    const message = descriptorFixture({ 'x-raw': '\xff' })
 
     assert.throws(
-      () => createSignatureBase(requestFixture(), { components: ['x-raw'], fieldValues }),
+      () => createSignatureBase(message, { components: ['x-raw'] }),
       /HTTP field "x-raw" contains a non-ASCII character/,
     )
     assert.match(
-      createSignatureBase(requestFixture(), {
-        components: [component('x-raw', { bs: true })],
-        fieldValues,
-      }),
+      createSignatureBase(message, { components: [component('x-raw', { bs: true })] }),
       /^"x-raw";bs: :\/w==:$/m,
     )
   })
@@ -446,11 +464,8 @@ describe('derived-component and field boundaries', () => {
   it('rejects non-octet raw field values under ;bs', () => {
     assert.throws(
       () =>
-        createSignatureBase(requestFixture(), {
+        createSignatureBase(descriptorFixture({ example: 'snowman ☃' }), {
           components: [component('example', { bs: true })],
-          fieldValues() {
-            return ['snowman ☃']
-          },
         }),
       /cannot be represented as bytes/,
     )
@@ -461,8 +476,7 @@ describe('derived-component and field boundaries', () => {
     headers.append('set-cookie', 'a=1')
     headers.append('set-cookie', 'b=2')
     const request = new Request('https://example.com/', { headers })
-    // A browser strips Set-Cookie from a request outright, so the field reads as absent there
-    // and coverage needs a fieldValues adapter instead. See guides/fetch.md.
+    // A browser strips Set-Cookie from a request outright, so the field reads as absent there.
     if (!request.headers.has('set-cookie')) {
       return
     }
@@ -537,7 +551,7 @@ describe('synchronous providers', () => {
 
     const result = syncVerifier(
       { label: 'tested', components: [], parameters: [], signature },
-      { message: requestFixture() },
+      { message: requestSnapshotFixture() },
     ).verify(data, signature)
     // A boolean, not a Promise of one, so the provider never suspended.
     assert.equal(result, true)
@@ -612,10 +626,7 @@ describe('provider contracts and mutation resistance', () => {
 
   it('rejects an invalid signer implementation object', async () => {
     await assert.rejects(
-      createSignature(requestFixture(), {
-        ...signOptions(),
-        signer: () => ({}) as never,
-      }),
+      createSignature(requestFixture(), { ...signOptions(), signer: () => ({}) as never }),
       /Invalid "signer"/,
     )
   })
@@ -736,10 +747,7 @@ describe('provider contracts and mutation resistance', () => {
       },
     )
     await assert.rejects(
-      verify(signed, {
-        verifier: (() => ({})) as never,
-        policy: verificationPolicy(),
-      }),
+      verify(signed, { verifier: (() => ({})) as never, policy: verificationPolicy() }),
       /Invalid "verifier"/,
     )
   })
@@ -787,7 +795,9 @@ describe('provider contracts and mutation resistance', () => {
       verify(signed, {
         verifier() {
           signed.headers.set('x-covered', 'factory mutation')
-          return webCryptoVerifier()(getSignatures(signed)[0]!, { message: signed })
+          return webCryptoVerifier()(getSignatures(signed)[0]!, {
+            message: requestSnapshotFixture(),
+          })
         },
         policy: verificationPolicy(),
       }),
@@ -1356,10 +1366,9 @@ describe('signature parsing, metadata, and multiple-signature boundaries', () =>
         return {
           alg: 'hmac-sha256',
           async verify(data, signature) {
-            return (await webCryptoVerifier()(observed, { message: signed })).verify(
-              data,
-              signature,
-            )
+            return (
+              await webCryptoVerifier()(observed, { message: requestSnapshotFixture() })
+            ).verify(data, signature)
           },
         }
       },
@@ -1404,49 +1413,6 @@ describe('option and message shape validation', () => {
     )
   })
 
-  it('rejects a non-callable field adapter even when no field component uses it', () => {
-    assert.throws(
-      () =>
-        createSignatureBase(new Request('https://example.com/'), {
-          components: ['@method'],
-          fieldValues: {} as unknown as SignOptions['fieldValues'],
-        }),
-      /"fieldValues" must be a function/,
-    )
-  })
-
-  it('rejects invalid shared options from every entry point', async () => {
-    const context = { fieldValues: {} as unknown as SignOptions['fieldValues'] }
-    await assert.rejects(
-      sign(new Request('https://example.com/'), { ...signOptions(), ...context }),
-      /"fieldValues" must be a function/,
-    )
-    await assert.rejects(
-      verify(await signedFixture(), {
-        verifier: webCryptoVerifier(),
-        policy: verificationPolicy(),
-        ...context,
-      }),
-      /"fieldValues" must be a function/,
-    )
-    assert.throws(
-      () =>
-        createSigningFetch({
-          sign: { ...signOptions(), ...context },
-          fetch: (async () => new Response(null)) as typeof fetch,
-        }),
-      /"fieldValues" must be a function/,
-    )
-    assert.throws(
-      () =>
-        createVerifyingFetch({
-          verify: { verifier: webCryptoVerifier(), policy: verificationPolicy(), ...context },
-          fetch: (async () => new Response(null)) as typeof fetch,
-        }),
-      /"fieldValues" must be a function/,
-    )
-  })
-
   it('rejects an invalid verification policy when a fetch wrapper is created', () => {
     assert.throws(
       () =>
@@ -1466,6 +1432,155 @@ describe('option and message shape validation', () => {
     assert.throws(
       () => createSignatureBase(message, { components: ['@method'] }),
       /"message" must be a Request, Response, or plain message descriptor/,
+    )
+  })
+})
+
+describe('ordinary configuration objects', () => {
+  it('accepts frozen null-prototype records', () => {
+    const parameters = Object.assign(Object.create(null) as Record<string, number>, {
+      created: RFC_CREATED,
+    })
+    const options = Object.create(null) as {
+      components: string[]
+      parameters: Record<string, number>
+    }
+    Object.defineProperty(options, 'components', { enumerable: true, value: ['@method'] })
+    Object.defineProperty(options, 'parameters', { enumerable: true, value: parameters })
+    Object.freeze(parameters)
+    Object.freeze(options)
+
+    assert.equal(
+      createSignatureBase(new Request('https://example.com/'), options),
+      `"@method": GET\n"@signature-params": ("@method");created=${RFC_CREATED}`,
+    )
+  })
+
+  it('rejects inherited package configuration', () => {
+    const options = Object.create({ components: ['@method'] })
+    assert.throws(
+      () => createSignatureBase(new Request('https://example.com/'), options),
+      /"options" must be a plain object/,
+    )
+
+    class SigningConfiguration {
+      readonly signer = webCryptoSigner()
+      readonly components = ['@method']
+    }
+    assert.throws(
+      () =>
+        createSigningFetch({
+          sign: new SigningConfiguration(),
+          fetch: (async () => new Response(null)) as typeof fetch,
+        }),
+      /"options.sign" must be a plain object/,
+    )
+
+    const hidden = Object.create(null)
+    Object.defineProperty(hidden, 'components', { value: ['@method'] })
+    assert.throws(
+      () => createSignatureBase(new Request('https://example.com/'), hidden),
+      /"options" must contain only enumerable data properties/,
+    )
+  })
+
+  it('rejects accessors without evaluating them', () => {
+    let reads = 0
+    const options = {}
+    Object.defineProperty(options, 'components', {
+      enumerable: true,
+      get() {
+        reads++
+        return ['@method']
+      },
+    })
+    assert.throws(
+      () => createSignatureBase(new Request('https://example.com/'), options as never),
+      /"options" must contain only enumerable data properties/,
+    )
+    assert.equal(reads, 0)
+
+    const parameters = {}
+    Object.defineProperty(parameters, 'created', {
+      enumerable: true,
+      get() {
+        reads++
+        return RFC_CREATED
+      },
+    })
+
+    assert.throws(
+      () =>
+        createSignatureBase(new Request('https://example.com/'), {
+          components: ['@method'],
+          parameters,
+        }),
+      /Parameters must contain only enumerable data properties/,
+    )
+    assert.equal(reads, 0)
+
+    const wrapped = {}
+    Object.defineProperty(wrapped, 'type', {
+      get() {
+        reads++
+        return 'token'
+      },
+    })
+    Object.defineProperty(wrapped, 'value', { value: 'example' })
+    assert.throws(
+      () =>
+        createSignatureBase(new Request('https://example.com/'), {
+          components: ['@method'],
+          parameters: { extension: wrapped as never },
+        }),
+      /Signature parameter "extension" must contain only enumerable data properties/,
+    )
+    assert.equal(reads, 0)
+
+    const wrapperParameter = {}
+    Object.defineProperty(wrapperParameter, 'type', {
+      enumerable: true,
+      get() {
+        reads++
+        return 'token'
+      },
+    })
+    Object.defineProperty(wrapperParameter, 'value', { enumerable: true, value: 'example' })
+    assert.throws(
+      () =>
+        createSigningFetch({
+          sign: {
+            signer: webCryptoSigner(),
+            components: ['@method'],
+            parameters: { extension: wrapperParameter as never },
+          },
+        }),
+      /Signature parameter value must contain only enumerable data properties/,
+    )
+    assert.equal(reads, 0)
+  })
+
+  it('applies the contract to component and Structured Field records', () => {
+    const componentParameters = {}
+    Object.defineProperty(componentParameters, 'req', { get: () => true })
+    assert.throws(
+      () => component('@method', componentParameters),
+      /"parameters" must contain only enumerable data properties/,
+    )
+
+    class StructuredFields {
+      readonly example = 'item' as const
+    }
+    assert.throws(
+      () =>
+        createSignatureBase(new Request('https://example.com/'), {
+          components: ['@method'],
+          structuredFields: new StructuredFields() as unknown as Record<
+            string,
+            StructuredFieldType
+          >,
+        }),
+      /"structuredFields" must be a plain object/,
     )
   })
 })
@@ -1598,44 +1713,31 @@ describe('derived component error paths', () => {
   })
 })
 
-describe('field adapter contract', () => {
+describe('message descriptor field occurrences', () => {
   const request = new Request('https://example.com/')
 
-  it('requires an adapter for trailers because Fetch does not expose them', () => {
+  it('reports a trailer as absent when Fetch does not expose one', () => {
     assert.throws(
       () => createSignatureBase(request, { components: [component('expires', { tr: true })] }),
-      /Trailer field "expires" is not exposed by the message/,
+      /Trailer field "expires" is not present/,
     )
   })
 
-  it('rejects an adapter that does not return an array', () => {
+  it('rejects a descriptor occurrence that is not a string', () => {
     assert.throws(
       () =>
-        createSignatureBase(request, {
+        createSignatureBase(descriptorFixture({ example: [1 as unknown as string] }), {
           components: ['example'],
-          fieldValues: () => 'value' as unknown as ReadonlyArray<string>,
         }),
-      /"fieldValues" must return an array of strings or undefined/,
-    )
-  })
-
-  it('rejects an adapter that returns a value that is not a string', () => {
-    assert.throws(
-      () =>
-        createSignatureBase(request, {
-          components: ['example'],
-          fieldValues: () => [1 as unknown as string],
-        }),
-      /"fieldValues" must return strings/,
+      /HTTP field occurrences must be strings/,
     )
   })
 
   it('rejects a field value containing a newline', () => {
     assert.throws(
       () =>
-        createSignatureBase(request, {
+        createSignatureBase(descriptorFixture({ example: 'first\nsecond' }), {
           components: ['example'],
-          fieldValues: () => ['first\nsecond'],
         }),
       /HTTP field "example" contains a newline/,
     )
@@ -1643,8 +1745,17 @@ describe('field adapter contract', () => {
 
   it('treats an empty array as an absent field', () => {
     assert.throws(
-      () => createSignatureBase(request, { components: ['example'], fieldValues: () => [] }),
+      () => createSignatureBase(descriptorFixture({ example: [] }), { components: ['example'] }),
       /Header field "example" is not present/,
+    )
+  })
+
+  it('reads explicit trailer occurrences from a descriptor', () => {
+    assert.equal(
+      createSignatureBase(descriptorFixture({}, { expires: ['one', 'two'] }), {
+        components: [component('expires', { tr: true })],
+      }).split('\n')[0],
+      '"expires";tr: one, two',
     )
   })
 })
@@ -2040,8 +2151,6 @@ describe('target URI boundaries', () => {
 })
 
 describe('field value canonicalization', () => {
-  const request = () => new Request('https://example.com/')
-
   it('collapses the whitespace on both sides of an obsolete line fold', () => {
     // RFC 9112 defines obs-fold as OWS CRLF RWS, so the whitespace before the CRLF is part of it.
     const cases: ReadonlyArray<readonly [string, string]> = [
@@ -2052,7 +2161,7 @@ describe('field value canonicalization', () => {
     ]
     for (const [raw, expected] of cases) {
       assert.equal(
-        createSignatureBase(request(), { components: ['x-fold'], fieldValues: () => [raw] }).split(
+        createSignatureBase(descriptorFixture({ 'x-fold': raw }), { components: ['x-fold'] }).split(
           '\n',
         )[0],
         `"x-fold": ${expected}`,
@@ -2064,7 +2173,7 @@ describe('field value canonicalization', () => {
   it('still rejects a CRLF that is not a fold', () => {
     assert.throws(
       () =>
-        createSignatureBase(request(), { components: ['x-fold'], fieldValues: () => ['a\r\nb'] }),
+        createSignatureBase(descriptorFixture({ 'x-fold': 'a\r\nb' }), { components: ['x-fold'] }),
       /contains a newline/,
     )
   })
@@ -2075,7 +2184,7 @@ describe('field value canonicalization', () => {
     const value = `y${'\t'.repeat(200_000)}x`
     const started = performance.now()
     assert.equal(
-      createSignatureBase(request(), { components: ['x-pad'], fieldValues: () => [value] }).split(
+      createSignatureBase(descriptorFixture({ 'x-pad': value }), { components: ['x-pad'] }).split(
         '\n',
       )[0],
       `"x-pad": ${value}`,
@@ -2217,18 +2326,19 @@ describe('linear-time boundary before verification', () => {
     function countFieldReads(keyCount: number): number {
       let reads = 0
       const dictionary = Array.from({ length: 64 }, (_, index) => `k${index}=${index}`).join(', ')
+      const headers = Object.create(null) as Record<string, string>
+      Object.defineProperty(headers, 'x-dict', {
+        enumerable: true,
+        get() {
+          reads++
+          return dictionary
+        },
+      })
 
-      createSignatureBase(new Request('https://example.com/'), {
+      createSignatureBase(descriptorFixture(headers), {
         components: Array.from({ length: keyCount }, (_, index) =>
           component('x-dict', { key: `k${index}` }),
         ),
-        fieldValues(_message, name) {
-          if (name === 'x-dict') {
-            reads++
-            return [dictionary]
-          }
-          return undefined
-        },
       })
       return reads
     }

@@ -307,9 +307,10 @@ fields.signatureField // signature
 ```
 
 `headers` accepts a `Headers`, or a plain record whose values are a string or an array of strings.
-An array is one field with repeated occurrences, which RFC 9421 combines with `", "`. Passing the
-record straight through matters: building a `Headers` from it first would join those occurrences
-with a bare comma and fold repeated `Set-Cookie` lines into one, changing what gets signed.
+An optional `trailers` member accepts the same shape. An array is one field with repeated
+occurrences, which RFC 9421 combines with `", "`. Passing the record straight through matters:
+building a `Headers` from it first would join those occurrences with a bare comma and fold repeated
+`Set-Cookie` lines into one, changing what gets signed.
 
 `verify()` takes the same shape, so the receiving side reads an incoming request the same way. Every
 operation that only reads a message accepts it: `createSignatureBase()`, `createSignature()`,

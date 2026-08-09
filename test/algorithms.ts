@@ -22,6 +22,7 @@ import {
   type MessageSignature,
   type SignerFactory,
   type SynchronousVerifierFactory,
+  type VerificationContext,
 } from '../index.ts'
 
 interface KeyMaterial {
@@ -149,7 +150,14 @@ const providerSignature: MessageSignature = {
   parameters: [],
   signature: new Uint8Array(),
 }
-const providerContext = { message: new Request('https://example.com/') }
+const providerContext = Object.freeze({
+  message: Object.freeze({
+    method: 'GET',
+    url: 'https://example.com/',
+    headers: Object.freeze({}),
+    trailers: Object.freeze({}),
+  }),
+}) satisfies VerificationContext
 const message = new TextEncoder().encode('HTTP Message Signatures')
 const differentMessage = new TextEncoder().encode('HTTP Message Signaturez')
 const created = 1_618_884_473

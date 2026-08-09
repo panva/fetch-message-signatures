@@ -62,10 +62,12 @@ Retain the exact request that was sent when a response signature covers request 
 redirects manually, authorize each target, and re-sign each redirected request instead of forwarding
 stale signature fields.
 
-Signing and verification reject observable message changes while asynchronous providers or policy
-callbacks are running. After `verify()` returns, continue processing the same stable message state:
-do not mutate covered headers or hand the message to code that can change them before the
-authenticated values are consumed.
+Signing and verification capture the target message and related request in a package-owned,
+immutable snapshot. Verifier and policy callbacks receive that snapshot, including frozen header and
+trailer occurrence arrays, rather than the caller's mutable message object. The package compares the
+source with the snapshot after application callbacks run and rejects observable changes. After
+`verify()` returns, continue processing the same stable message state: do not mutate covered fields
+or hand the source to code that can change them before the authenticated values are consumed.
 
 ## Transport, resources, and failures
 

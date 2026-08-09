@@ -26,14 +26,13 @@ The algorithm selected by the verifier factory.
 
 ### message
 
-> `readonly` **message**: [`NormalizedMessage`](../type-aliases/NormalizedMessage.md)
+> `readonly` **message**: [`MessageSnapshot`](../type-aliases/MessageSnapshot.md)
 
 The target message carrying the signature.
 
-Its fields are always a `Headers`, whatever shape was passed to [verify](../functions/verify.md), so a callback
-can read them without normalizing first. Record occurrences are converted using the host
-`Headers` semantics for application processing; RFC 9421's signature-base combination is a
-separate representation and can differ for non-list fields.
+This is an immutable, package-owned snapshot captured at the start of verification. Field names
+are lowercase and each value is the ordered list of occurrences used to construct the signature
+base. Every verification callback observes the same snapshot values.
 
 #### Inherited from
 
@@ -43,9 +42,9 @@ separate representation and can differ for non-list fields.
 
 ### request?
 
-> `readonly` `optional` **request?**: [`NormalizedRequest`](../type-aliases/NormalizedRequest.md)
+> `readonly` `optional` **request?**: [`RequestSnapshot`](RequestSnapshot.md)
 
-The normalized related request, when response/request binding is in use.
+The related-request snapshot, when response/request binding is in use.
 
 #### Inherited from
 

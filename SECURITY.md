@@ -32,12 +32,13 @@ signature-related Structured Fields, derives covered components, constructs sign
 delegates signing, verification, and key selection to application-provided factories, and applies
 recipient verification policy.
 
-While an application-provided signer, verifier, field adapter, or policy callback is suspended, the
-message can change underneath it. The package rebuilds the signature base around each of those calls
-and rejects the operation if it no longer matches, so a signature is never produced over, or
-accepted for, a message state that was never observed as a whole. This covers everything a signature
-base is derived from, including the related request. It does not cover message bodies, which the
-package never reads.
+At the start of signing or verification, the package captures the target message and related request
+in a package-owned immutable snapshot. Signature-base construction and verification callbacks use
+that one snapshot. After application-provided signing, key selection, verification, or policy code
+runs, the package compares the source with the snapshot and rejects a change, so a signature is
+never produced over, or accepted for, a message state that was never observed as a whole. This
+covers everything a signature base is derived from, including explicit header and trailer
+occurrences. It does not cover message bodies, which the package never reads.
 
 The package provides key-pair generators and signer/verifier adapters backed by Web Cryptography for
 ECDSA P-256, ECDSA P-384, Ed25519, and RSA. It does not provide persistent key management, trust

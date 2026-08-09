@@ -84,12 +84,35 @@ describe('plain message descriptors', () => {
     }
 
     assert.equal(getSignatures(received).length, 1)
+    let verifierMessage: object | undefined
+    let verifierRequest: object | undefined
     const verified = await verify(received, {
       verifier(signature, context) {
-        assert.ok(context.message.headers instanceof Headers)
-        assert.ok(context.request?.headers instanceof Headers)
-        context.message.headers.set('x-verifier-only', 'changed')
-        context.request?.headers.set('x-verifier-only', 'changed')
+        assert.ok(Object.isFrozen(context.message))
+        assert.ok(Object.isFrozen(context.message.headers))
+        assert.ok(Object.isFrozen(context.message.trailers))
+        assert.equal(Object.getPrototypeOf(context.message.headers), null)
+        assert.equal(Object.getPrototypeOf(context.message.trailers), null)
+        assert.ok(Object.isFrozen(context.message.headers['content-type']))
+        assert.deepEqual(context.message.headers['content-type'], ['application/json'])
+        assert.ok(context.request)
+        assert.ok(Object.isFrozen(context.request))
+        assert.ok(Object.isFrozen(context.request.headers))
+        assert.ok(Object.isFrozen(context.request.trailers))
+        assert.equal(Object.getPrototypeOf(context.request.headers), null)
+        assert.equal(Object.getPrototypeOf(context.request.trailers), null)
+        assert.ok(Object.isFrozen(context.request.headers['content-type']))
+        assert.deepEqual(context.request.headers['content-type'], ['application/json'])
+        const messageHeaders = context.message.headers as Record<string, ReadonlyArray<string>>
+        const requestContentType = context.request.headers['content-type'] as string[]
+        assert.throws(() => {
+          messageHeaders['x-verifier-only'] = ['changed']
+        }, TypeError)
+        assert.throws(() => {
+          requestContentType.push('changed')
+        }, TypeError)
+        verifierMessage = context.message
+        verifierRequest = context.request
         return webCryptoVerifier()(signature, context)
       },
       request,
@@ -98,10 +121,11 @@ describe('plain message descriptors', () => {
           requiredComponents: ['@status', component('@authority', { req: true })],
         }),
         validate(_signature, context) {
-          assert.ok(context.message.headers instanceof Headers)
-          assert.ok(context.request?.headers instanceof Headers)
-          assert.equal(context.message.headers.has('x-verifier-only'), false)
-          assert.equal(context.request?.headers.has('x-verifier-only'), false)
+          assert.equal(context.message, verifierMessage)
+          assert.equal(context.request, verifierRequest)
+          assert.equal(Object.hasOwn(context.message.headers, 'x-verifier-only'), false)
+          assert.equal(Object.hasOwn(context.request!.headers, 'x-verifier-only'), false)
+          assert.deepEqual(context.request!.headers['content-type'], ['application/json'])
         },
       },
     })
@@ -148,14 +172,12 @@ describe('plain message descriptors', () => {
     // The record constructor collapses these into one folded value.
     assert.deepEqual(new Headers({ 'set-cookie': cookies } as never).getSetCookie(), ['a=1,b=2'])
 
-    const expected = createSignatureBase(new Response('', { status: 200 }), {
-      components: ['set-cookie'],
-      parameters: PARAMETERS,
-      fieldValues: () => cookies,
-    })
     assert.equal(
       createSignatureBase(descriptor, { components: ['set-cookie'], parameters: PARAMETERS }),
-      expected,
+      [
+        '"set-cookie": a=1, b=2',
+        '"@signature-params": ("set-cookie");created=1618884473;keyid="client-key"',
+      ].join('\n'),
     )
   })
 
@@ -172,21 +194,6 @@ describe('plain message descriptors', () => {
     )
     assert.match(
       createSignatureBase(descriptor, { components: ['x-covered'], parameters: PARAMETERS }),
-      /^"x-covered": value$/m,
-    )
-  })
-
-  it('passes the caller descriptor itself to a field adapter', () => {
-    const descriptor: SignableRequest = { method: 'GET', url: URL_, headers: FIELDS }
-
-    assert.match(
-      createSignatureBase(descriptor, {
-        components: ['x-covered'],
-        fieldValues(message) {
-          assert.equal(message, descriptor)
-          return ['value']
-        },
-      }),
       /^"x-covered": value$/m,
     )
   })
@@ -363,6 +370,35 @@ describe('plain message descriptors', () => {
         policy: verificationPolicy({ requiredComponents: ['x-covered'] }),
       }),
       /changed during signature verification/,
+    )
+  })
+
+  it('rejects loss of explicit occurrence boundaries while verifying', async () => {
+    const unsigned = { method: 'GET', url: URL_, headers: { 'x-covered': 'one, two' } }
+    const covered = component('x-covered', { bs: true })
+    const fields = await createSignature(unsigned, {
+      signer: webCryptoSigner(),
+      components: [covered],
+      parameters: { created: RFC_CREATED },
+    })
+    const signed: { method: string; url: string; headers: Record<string, string> | Headers } = {
+      ...unsigned,
+      headers: {
+        ...unsigned.headers,
+        'signature-input': fields.signatureInput,
+        signature: fields.signatureField,
+      },
+    }
+
+    await assert.rejects(
+      verify(signed, {
+        verifier(signature, context) {
+          signed.headers = new Headers(signed.headers)
+          return webCryptoVerifier()(signature, context)
+        },
+        policy: verificationPolicy({ requiredComponents: [covered] }),
+      }),
+      /field occurrences changed during signature verification/,
     )
   })
 

@@ -7,7 +7,6 @@ Options for direct signature-base creation.
 - [Extends](#extends)
 - [Properties](#properties)
   - [components](#components)
-  - [fieldValues?](#fieldvalues)
   - [parameters?](#parameters)
   - [request?](#request)
   - [structuredFields?](#structuredfields)
@@ -21,18 +20,6 @@ Options for direct signature-base creation.
 ### components
 
 > `readonly` **components**: readonly [`ComponentIdentifier`](../type-aliases/ComponentIdentifier.md)\[]
-
-***
-
-### fieldValues?
-
-> `readonly` `optional` **fieldValues?**: [`FieldValues`](../type-aliases/FieldValues.md)
-
-Adapter for raw field occurrences and trailers.
-
-#### Inherited from
-
-[`SignatureContext`](SignatureContext.md).[`fieldValues`](SignatureContext.md#fieldvalues)
 
 ***
 

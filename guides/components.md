@@ -250,21 +250,21 @@ handing a value to it.
 
 ## Raw field values
 
-Supply `fieldValues` when a component needs original field occurrences, trailer values, or another
-authoritative transport representation:
+Supply a plain message descriptor when a component needs original field occurrences or trailer
+values that Fetch does not expose. An array value is the occurrence list in wire order:
 
 ```ts
-const request = new Request('https://api.example/')
+const request: FetchSig.SignableRequest = {
+  method: 'GET',
+  url: 'https://api.example/',
+  headers: {
+    // The two field lines as they appear on the wire, in order.
+    'x-list': ['value, with, lots', 'of, commas'],
+  },
+}
 
 const base = FetchSig.createSignatureBase(request, {
   components: [FetchSig.component('x-list', [['bs', true]])],
-  fieldValues(message, name, context) {
-    if (name === 'x-list' && !context.trailers) {
-      // The two field lines as they appear on the wire, in order.
-      return ['value, with, lots', 'of, commas']
-    }
-    return undefined
-  },
 })
 
 // "x-list";bs: :dmFsdWUsIHdpdGgsIGxvdHM=:, :b2YsIGNvbW1hcw==:
@@ -276,13 +276,17 @@ Two field lines produce two Byte Sequences. A single line reading `value, with, 
 would produce one Byte Sequence with a different value, which is exactly the collision that `bs`
 prevents.
 
-The adapter must return field occurrences in wire order. It receives the actual source message,
-lowercase field name, and flags indicating trailers and related-request access. Returning
-`undefined` or an empty array means absent. Values containing disallowed control characters or
-newlines are rejected. Keep header and trailer occurrences separate by branching on
-`context.trailers`. Runtimes with `Headers.getSetCookie()` can provide `set-cookie` occurrences
-without an adapter. A plain message descriptor also retains occurrences without an adapter when the
-field value is supplied as an array.
+Descriptor values can be one string for one known occurrence, an array for repeated occurrences, or
+`undefined` for an absent field. An empty array is also absent. Values containing disallowed control
+characters or a newline that is not an obsolete line fold are rejected; an obsolete fold is
+canonicalized to one space. Put trailer occurrences in the descriptor's separate optional `trailers`
+record; never combine a same-name header and trailer. A related request supplied for `req`
+components can use the same descriptor shape.
+
+The package copies descriptor fields into the operation's immutable snapshot, lowercases their
+names, and freezes every occurrence array. A Fetch `Headers` does not retain occurrence boundaries,
+so it cannot satisfy `bs` even when its combined value happens to look like one field line. The
+exception is `set-cookie` in runtimes with `Headers.getSetCookie()`.
 
 Occurrences without `bs` are combined with a comma and a single space. `bs` instead wraps each
 occurrence as a Structured Field Byte Sequence, taking one octet per JavaScript code unit, which is

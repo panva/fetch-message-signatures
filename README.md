@@ -119,9 +119,16 @@ require standards-compatible `Request`, `Response`, and `Headers` implementation
 also require `fetch` itself. Every reading operation, including `createSignature()` and `verify()`,
 additionally accepts a plain object carrying `method`, `url`, and `headers` for a request, or
 `status` and `headers` for a response, so a server that never constructs a `Request` can sign and
-verify by attaching the returned field values itself. The built-in cryptographic providers require
-the Web Cryptography API and runtime support for the selected algorithm. The package does not
-provide polyfills.
+verify by attaching the returned field values itself. A descriptor field value can be an array of
+occurrences in wire order, and an optional `trailers` record supplies trailer occurrences. The
+built-in cryptographic providers require the Web Cryptography API and runtime support for the
+selected algorithm. The package does not provide polyfills.
+
+Signing and verification capture the target message and related request into package-owned,
+immutable snapshots. A verifier factory and `policy.validate` receive the same `MessageSnapshot`,
+whose lowercase header and trailer names map to frozen occurrence arrays, rather than the caller's
+mutable message object. Keep the source message stable until the operation settles: it is compared
+with the snapshot after application callbacks run, and a change rejects the operation.
 
 Package configuration records must be object literals or null-prototype objects whose own members
 are enumerable data properties. Frozen records are supported; class instances, inherited or
