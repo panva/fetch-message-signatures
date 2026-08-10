@@ -26,6 +26,16 @@ const FAMILIES = {
   accept: 'Accept-Signature',
 }
 
+/** Top-level initializers that a trivial export must not retain. */
+const INITIALIZERS = [
+  'TextEncoder',
+  'TextDecoder',
+  'getOwnPropertyDescriptor',
+  'Symbol.toStringTag',
+  'new Set',
+  'new WeakMap',
+]
+
 /**
  * Entry points to check, with the families each is allowed to pull in.
  *
@@ -33,6 +43,7 @@ const FAMILIES = {
  * cryptographic providers, and the parsing helpers belong to neither side.
  */
 const ENTRIES = [
+  { name: 'VerificationError', families: [], excludes: INITIALIZERS },
   { name: 'sign', families: ['sender'] },
   { name: 'createSignature', families: ['sender'] },
   { name: 'createSigningFetch', families: ['sender'] },
@@ -77,7 +88,7 @@ async function bundleExport(name) {
 const failures = []
 const rows = []
 
-for (const { name, families } of ENTRIES) {
+for (const { name, families, excludes = [] } of ENTRIES) {
   const output = await bundleExport(name)
   const present = Object.entries(FAMILIES)
     .filter(([, marker]) => output.includes(marker))
@@ -97,6 +108,11 @@ for (const { name, families } of ENTRIES) {
       failures.push(`${name}: pulls in the "${family}" family, which it must not reach`)
     }
   }
+  for (const marker of excludes) {
+    if (output.includes(marker)) {
+      failures.push(`${name}: retains unused top-level initializer marker ${marker}`)
+    }
+  }
 
   const bytes = Buffer.from(output)
   rows.push({ name, bytes: bytes.byteLength, gzip: gzipSync(bytes).byteLength, families: present })
@@ -112,11 +128,13 @@ for (const { name, bytes, gzip, families } of rows) {
 }
 
 if (failures.length !== 0) {
-  console.error('\nBundle family isolation failed:')
+  console.error('\nBundle isolation failed:')
   for (const failure of failures) {
     console.error(`  ${failure}`)
   }
   process.exit(1)
 }
 
-console.log('\nOK - sender, recipient, and Accept-Signature bundles stay separate')
+console.log(
+  '\nOK - sender, recipient, and Accept-Signature bundles stay separate and unused initializers are removed',
+)

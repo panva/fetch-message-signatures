@@ -92,7 +92,7 @@
 const encoder = /* @__PURE__ */ new TextEncoder()
 const decoder = /* @__PURE__ */ new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
-const DERIVED_COMPONENTS = new Set([
+const DERIVED_COMPONENTS = /* @__PURE__ */ new Set([
   '@method',
   '@target-uri',
   '@authority',
@@ -104,7 +104,14 @@ const DERIVED_COMPONENTS = new Set([
   '@status',
 ])
 
-const SIGNATURE_PARAMETERS = new Set(['created', 'expires', 'nonce', 'alg', 'keyid', 'tag'])
+const SIGNATURE_PARAMETERS = /* @__PURE__ */ new Set([
+  'created',
+  'expires',
+  'nonce',
+  'alg',
+  'keyid',
+  'tag',
+])
 
 const HTTP_FIELD_NAME = /^[!#$%&'*+\-.^_`|~0-9a-z]+$/
 const SF_KEY = /^[a-z*][a-z0-9_.*-]*$/
@@ -1272,10 +1279,9 @@ function isDate(value: unknown): value is Date {
  * The `%TypedArray%.prototype[Symbol.toStringTag]` getter, which reports the name of a typed array
  * from an internal slot and returns `undefined` for every other value.
  */
-const typedArrayName = /* @__PURE__ */ Object.getOwnPropertyDescriptor(
-  /* @__PURE__ */ Object.getPrototypeOf(Uint8Array.prototype),
-  Symbol.toStringTag,
-)!.get! as (this: unknown) => string | undefined
+const typedArrayName = /* @__PURE__ */ (() =>
+  Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), Symbol.toStringTag)!
+    .get!)() as (this: unknown) => string | undefined
 
 /**
  * Reports whether a value is a `Uint8Array`, including one created in another realm.
@@ -1364,7 +1370,7 @@ interface OccurrenceKnowledge {
 }
 
 /** Exact-occurrence metadata kept out of the public immutable snapshot. */
-const occurrenceKnowledge = new WeakMap<MessageSnapshot, OccurrenceKnowledge>()
+const occurrenceKnowledge = /* @__PURE__ */ new WeakMap<MessageSnapshot, OccurrenceKnowledge>()
 
 interface CapturedOccurrences {
   readonly fields: FieldOccurrences
@@ -6206,7 +6212,7 @@ function createFetchRequest(input: RequestInfo | URL, init?: RequestInit): Reque
 }
 
 /** The `RequestInit` members Fetch defines, all of which a constructed `Request` already carries. */
-const STANDARD_REQUEST_INIT = new Set([
+const STANDARD_REQUEST_INIT = /* @__PURE__ */ new Set([
   'body',
   'cache',
   'credentials',
