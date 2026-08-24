@@ -1,9 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-COMPATIBILITY_DATE=$(node -p "const d = require('workerd').compatibilityDate, t = new Date().toISOString().slice(0,10); d > t ? t : d")
+WORKERD_BIN=${WORKERD_BIN:-"$(pwd)/test/workerd/node_modules/.bin/workerd"}
+WORKERD_MODULE=${WORKERD_MODULE:-"$(pwd)/test/workerd/node_modules/workerd"}
 
-echo "Using compatibility date $COMPATIBILITY_DATE"
+COMPATIBILITY_DATE=$(WORKERD_MODULE="$WORKERD_MODULE" node -p "const d = require(process.env.WORKERD_MODULE).compatibilityDate, t = new Date().toISOString().slice(0,10); d > t ? t : d")
+WORKERD_VERSION=$(WORKERD_MODULE="$WORKERD_MODULE" node -p "require(process.env.WORKERD_MODULE + '/package.json').version")
+
+echo "Using workerd $WORKERD_VERSION, compatibility date $COMPATIBILITY_DATE"
 
 node --run build
 node test/runners/bundle.js workerd
@@ -25,4 +29,4 @@ const testWorker :Workerd.Worker = (
 );
 EOT
 
-workerd test --verbose "$(pwd)/test/.workerd.capnp"
+"$WORKERD_BIN" test --verbose "$(pwd)/test/.workerd.capnp"
