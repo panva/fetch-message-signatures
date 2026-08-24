@@ -65,6 +65,7 @@
     "amaro": "^1.1.11",
     "esbuild": "^0.28.1",
     "express": "^5.2.1",
+    "fast-check": "^4.9.0",
     "fastify": "^5.11.3",
     "koa": "^3.2.1",
     "playwright": "^1.62.1",
