@@ -1,6 +1,6 @@
 {
   "name": "fetch-message-signatures",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "HTTP Message Signatures (RFC 9421) for the Fetch API",
   "keywords": [
     "browser",

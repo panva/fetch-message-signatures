@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.1](https://github.com/panva/fetch-message-signatures/compare/v0.1.0...v0.1.1) (2026-09-05)
+
+### Fixes
+
+* preserve leading question marks in query parameter names ([f4e34cb](https://github.com/panva/fetch-message-signatures/commit/f4e34cb05ee57e635d542737cb47c623717b82f9))
+* preserve raw descriptor paths in signature bases ([03c772d](https://github.com/panva/fetch-message-signatures/commit/03c772de7e48984205ae8deda92cdde68f6f060e))
+
+### Refactor
+
+* share fetch signing and verification lifecycle helpers ([ffd8d13](https://github.com/panva/fetch-message-signatures/commit/ffd8d1326ebfbfcd6e0610400a24f35eb05337e8))
+
+### Performance
+
+* improve tree shaking of module initializers ([baebf9f](https://github.com/panva/fetch-message-signatures/commit/baebf9f5c4b264b9c66535bd7e0f22cbf0883f6f))
+
 ## [0.1.0](https://github.com/panva/fetch-message-signatures/compare/v0.0.7...v0.1.0) (2026-08-09)
 
 ### ⚠ BREAKING CHANGES
