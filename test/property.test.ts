@@ -5,6 +5,8 @@ import fc from 'fast-check'
 import type { Arbitrary } from 'fast-check'
 
 import {
+  component,
+  createSignatureBase,
   date,
   decimal,
   displayString,
@@ -147,14 +149,101 @@ const requestPartArbitrary = fc
   })
   .map((characters) => characters.join(''))
 
+const rawPathArbitrary = fc.oneof(
+  fc.constant(''),
+  fc
+    .array(
+      fc.oneof(
+        requestPartArbitrary,
+        fc.constantFrom('', '.', '..', '%2e', '%2E%2e', '.%2e', '%2e.', 'a%2Fb', 'a%3Fb', '%25'),
+      ),
+      { minLength: 1, maxLength: 5 },
+    )
+    .map((segments) => `/${segments.join('/')}`),
+)
+
+const queryTextArbitrary = fc
+  .array(fc.constantFrom(...'abcXYZ09 ?%+&=/:!*()~', "'", '\u00e9', '\u2603', '\n', '\0'), {
+    maxLength: 16,
+  })
+  .map((characters) => characters.join(''))
+
+const queryNameArbitrary = fc.oneof(
+  queryTextArbitrary,
+  queryTextArbitrary.map((name) => `?${name}`),
+)
+
 const requestArbitrary = fc.record({
   method: fc.constantFrom('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'),
-  path: requestPartArbitrary,
-  query: requestPartArbitrary,
+  path: rawPathArbitrary,
+  query: queryTextArbitrary,
   header: requestPartArbitrary,
 })
 
-const coveredComponents = ['@method', '@authority', '@path', '@query', 'x-property'] as const
+const coveredComponents = [
+  '@method',
+  '@authority',
+  '@path',
+  '@query',
+  component('@query-param', { name: 'value' }),
+  'x-property',
+] as const
+
+describe('URL component properties', () => {
+  it('preserves raw paths against independently constructed bases', () => {
+    fc.assert(
+      fc.property(rawPathArbitrary, queryTextArbitrary, (path, value) => {
+        const query = `?${new URLSearchParams([['value', value]]).toString()}`
+        const message = { method: 'GET', url: `https://example.test${path}${query}`, headers: {} }
+        assert.equal(
+          createSignatureBase(message, { components: ['@path', '@request-target', '@query'] }),
+          [
+            `"@path": ${path || '/'}`,
+            `"@request-target": ${path || '/'}${query}`,
+            `"@query": ${query}`,
+            '"@signature-params": ("@path" "@request-target" "@query")',
+          ].join('\n'),
+        )
+      }),
+      options,
+    )
+  })
+
+  it('matches an independent query encoding oracle and rejects missing or repeated names', () => {
+    fc.assert(
+      fc.property(queryNameArbitrary, queryTextArbitrary, fc.boolean(), (name, value, literal) => {
+        const encoded = new URLSearchParams([[name, value]]).toString()
+        const canonical = encoded.replaceAll('+', '%20')
+        const separator = canonical.indexOf('=')
+        const encodedName = canonical.slice(0, separator)
+        const encodedValue = canonical.slice(separator + 1)
+        const query = literal ? encoded.replaceAll('%3F', '?').replaceAll('+', '%20') : encoded
+        const url = `https://example.test/?${query}`
+        const components = [component('@query-param', { name: encodedName })]
+        const identifier = `"@query-param";name="${encodedName}"`
+
+        for (const message of [new Request(url), { method: 'GET', url, headers: {} }]) {
+          assert.equal(
+            createSignatureBase(message, { components }),
+            `${identifier}: ${encodedValue}\n"@signature-params": (${identifier})`,
+          )
+          assert.throws(
+            () =>
+              createSignatureBase(message, {
+                components: [component('@query-param', { name: `missing-${encodedName}` })],
+              }),
+            /is not present/,
+          )
+        }
+        assert.throws(
+          () => createSignatureBase(new Request(`${url}&${encoded}`), { components }),
+          /occurs more than once/,
+        )
+      }),
+      options,
+    )
+  })
+})
 
 function tamperSignature(request: Request): Request {
   const headers = new Headers(request.headers)
@@ -171,7 +260,8 @@ describe('HTTP Message Signature properties', () => {
   it('round trips arbitrary requests and rejects authenticated tampering', async () => {
     await fc.assert(
       fc.asyncProperty(requestArbitrary, async ({ method, path, query, header }) => {
-        const unsigned = new Request(`https://example.test/${path}?value=${query}`, {
+        const search = new URLSearchParams([['value', query]]).toString().replaceAll('%3F', '?')
+        const unsigned = new Request(`https://example.test${path}?${search}`, {
           method,
           headers: { 'x-property': header },
         })
@@ -191,6 +281,23 @@ describe('HTTP Message Signature properties', () => {
 
         const verified = await verify(signed, verification)
         assert.equal(verified.algorithm, 'hmac-sha256')
+
+        const alteredPath = new URL(signed.url)
+        alteredPath.pathname += 'changed'
+        const alteredQuery = new URL(signed.url)
+        alteredQuery.searchParams.set('value', `${query}!`)
+        const alteredAuthority = new URL(signed.url)
+        alteredAuthority.hostname = 'other.example.test'
+        for (const url of [alteredPath, alteredQuery, alteredAuthority]) {
+          await assert.rejects(
+            verify(new Request(url, { method, headers: signed.headers }), verification),
+            { name: 'VerificationError', code: 'signature_mismatch' },
+          )
+        }
+        await assert.rejects(
+          verify(new Request(signed, { method: method === 'GET' ? 'POST' : 'GET' }), verification),
+          { name: 'VerificationError', code: 'signature_mismatch' },
+        )
 
         const headers = new Headers(signed.headers)
         headers.set('x-property', `${header}!`)
