@@ -3733,9 +3733,9 @@ function deriveQueryParameter(derived: TargetUriDerivation, encodedName: string)
 /**
  * Derives the value of a request-targeted RFC 9421 derived component.
  *
- * `@query`, `@query-param`, `@request-target`, and `@target-uri` read the target URI as a string so
- * that percent-encoded octets are preserved exactly, as the RFC's simple string comparison rules
- * require.
+ * `@path`, `@query`, `@query-param`, `@request-target`, and `@target-uri` read the target URI as a
+ * string so that percent-encoded octets are preserved exactly, as the RFC's simple string
+ * comparison rules require.
  *
  * The components that read the authority or the absolute path require a target URI that has an
  * authority. Every URI scheme RFC 9421 applies to has one, so a message whose URI does not, such as
@@ -3749,9 +3749,6 @@ function deriveRequestComponentValue(
 ): string {
   const derived = deriveTargetUri(request, derivations.targetUris)
   const { target, url } = derived
-  // The absolute path is normalized to "/" when the target URI has no path, matching the "@path"
-  // normalization required by RFC 9421 for both components.
-  const path = url.pathname || '/'
   const queryStart = target.indexOf('?')
   switch (identifier.name) {
     case '@method':
@@ -3766,10 +3763,10 @@ function deriveRequestComponentValue(
       return url.protocol.slice(0, -1).toLowerCase()
     case '@request-target':
       assertTargetUriAuthority(url, identifier.name)
-      return path + (queryStart === -1 ? '' : target.slice(queryStart))
+      return getTargetUriPath(target) + (queryStart === -1 ? '' : target.slice(queryStart))
     case '@path':
       assertTargetUriAuthority(url, identifier.name)
-      return path
+      return getTargetUriPath(target)
     case '@query':
       return queryStart === -1 ? '?' : target.slice(queryStart)
     case '@query-param':
@@ -3791,6 +3788,15 @@ function assertTargetUriAuthority(url: URL, name: string): string {
     fail(`Derived component "${name}" requires a target URI with an authority`)
   }
   return url.host
+}
+
+/** Extracts the original path without decoding or removing dot segments, defaulting to "/". */
+function getTargetUriPath(target: string): string {
+  const match = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?]*(\/[^?]*)?/.exec(target)
+  if (match === null) {
+    fail('Request target URI must have an explicit scheme and authority')
+  }
+  return match[1] || '/'
 }
 
 /**

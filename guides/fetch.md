@@ -165,8 +165,14 @@ fields, configure the top-level type as `'dictionary'`, `'list'`, or `'item'`.
 
 ## URL-derived components
 
-Derived request components come from `Request.url`. `@authority` lowercases the host, omits the
-scheme's default port even if it was explicit in the input URL, and retains a non-default port.
+Derived request components come from `Request.url` or the descriptor's `url`. `@authority`
+lowercases the host, omits the scheme's default port even if it was explicit in the input URL, and
+retains a non-default port.
+
+`@path` and `@request-target` preserve the supplied path, including percent-encoded octets and dot
+segments, and normalize an empty path to `/`. A Fetch `Request` may already have removed dot
+segments when its URL was constructed. A descriptor can retain them, and the package does not apply
+that additional normalization to its path.
 
 In particular, `@request-target` is an origin-form path and query derived from the URL. RFC 9421
 marks this component **NOT RECOMMENDED** when HTTP versions other than HTTP/1.1 might be in use.
@@ -199,11 +205,11 @@ Fetch does not expose:
 - proxy rewrites that happened before the Fetch object was created
 - later rewrites that happen after Fetch sends it
 
-Every derived value above comes from `Request.url` as the Fetch implementation normalized it, not
-from the octets on the wire. A reverse proxy that rewrites the target between signer and verifier
-therefore gives the two sides different values for the same message, and neither side can tell from
-its Fetch object that this happened. Signing and verifying on the same side of such a rewrite is a
-deployment property that this package cannot detect.
+For Fetch inputs, every derived value above comes from `Request.url` as the Fetch implementation
+normalized it, not from the octets on the wire. A reverse proxy that rewrites the target between
+signer and verifier therefore gives the two sides different values for the same message, and neither
+side can tell from its Fetch object that this happened. Signing and verifying on the same side of
+such a rewrite is a deployment property that this package cannot detect.
 
 ## Browser security boundaries
 

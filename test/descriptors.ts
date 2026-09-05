@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { component, createSignature, createSignatureBase, getSignatures, verify } from '../index.ts'
+import {
+  component,
+  createSignature,
+  createSignatureBase,
+  createSignatureFields,
+  getSignatures,
+  verify,
+} from '../index.ts'
 import type { SignableRequest, SignableResponse } from '../index.ts'
 import { RFC_CREATED, verificationPolicy, webCryptoSigner, webCryptoVerifier } from './support.ts'
 
@@ -29,6 +36,95 @@ describe('plain message descriptors', () => {
         expected,
       )
     }
+  })
+
+  it('preserves raw descriptor paths while normalizing the authority', () => {
+    const query = '?next=/a?b'
+    for (const path of [
+      '',
+      '/public/../admin',
+      '/public/%2e%2e/admin',
+      '/a/%2E/b',
+      '/a/.%2e/b',
+      '/a/%2e./b',
+      '//double///slashes',
+      '/a%2Fb',
+      '/a%3Fb',
+    ]) {
+      const descriptor = {
+        method: 'GET',
+        url: `https://EXAMPLE.com:443${path}${query}#fragment`,
+        headers: {},
+      }
+      assert.equal(
+        createSignatureBase(descriptor, {
+          components: ['@authority', '@path', '@request-target', '@query'],
+        }),
+        [
+          '"@authority": example.com',
+          `"@path": ${path || '/'}`,
+          `"@request-target": ${path || '/'}${query}`,
+          `"@query": ${query}`,
+          '"@signature-params": ("@authority" "@path" "@request-target" "@query")',
+        ].join('\n'),
+      )
+    }
+  })
+
+  it('verifies independently signed raw path components and rejects normalized aliases', async () => {
+    const path = '/public/%2e%2e/admin'
+    const query = '?action=read'
+    const signer = webCryptoSigner()()
+    for (const name of ['@path', '@request-target']) {
+      const value = name === '@path' ? path : path + query
+      const base = `"${name}": ${value}\n"@signature-params": ("${name}");created=${RFC_CREATED}`
+      const fields = createSignatureFields({
+        signature: await signer.sign(new TextEncoder().encode(base)),
+        components: [name],
+        parameters: { created: RFC_CREATED },
+      })
+      const descriptor = {
+        method: 'GET',
+        url: `https://example.com${path}${query}`,
+        headers: { 'signature-input': fields.signatureInput, signature: fields.signatureField },
+      }
+      const options = {
+        verifier: webCryptoVerifier(),
+        policy: verificationPolicy({ requiredComponents: [name] }),
+      }
+      assert.equal((await verify(descriptor, options)).label, 'sig1')
+      await assert.rejects(
+        verify({ ...descriptor, url: `https://example.com/admin${query}` }, options),
+        { name: 'VerificationError', code: 'signature_mismatch' },
+      )
+    }
+  })
+
+  it('preserves raw paths from a related request descriptor', () => {
+    const request = {
+      method: 'GET',
+      url: 'https://example.com/public/%2e%2e/admin?action=read',
+      headers: {},
+    }
+    assert.equal(
+      createSignatureBase(
+        { status: 200, headers: {} },
+        {
+          request,
+          components: [
+            '@status',
+            component('@path', { req: true }),
+            component('@request-target', { req: true }),
+          ],
+        },
+      ),
+      [
+        '"@status": 200',
+        '"@path";req: /public/%2e%2e/admin',
+        '"@request-target";req: /public/%2e%2e/admin?action=read',
+        '"@signature-params": ("@status" "@path";req "@request-target";req)',
+      ].join('\n'),
+    )
   })
 
   it('derives the same base as the equivalent Response', () => {
