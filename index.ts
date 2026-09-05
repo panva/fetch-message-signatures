@@ -6382,6 +6382,45 @@ function cancelUndeliveredBody(message: Request | Response): void {
   } catch {}
 }
 
+/** Signs a wrapper-owned request and releases undelivered bodies when signing fails or aborts. */
+async function signFetchRequest(
+  request: Request,
+  options: Omit<SignOptions, 'request'>,
+): Promise<Request> {
+  try {
+    return await settleBeforeAbort(
+      () => sign(request, options),
+      request.signal,
+      (signed) => {
+        if (signed !== undefined) {
+          cancelUndeliveredBody(signed)
+        }
+      },
+    )
+  } catch (error) {
+    cancelUndeliveredBody(request)
+    throw error
+  }
+}
+
+/** Verifies a wrapper-owned response and releases its body when verification fails or aborts. */
+async function verifyFetchResponse(
+  response: Response,
+  request: Request,
+  options: Omit<VerifyOptions, 'request'>,
+): Promise<void> {
+  try {
+    await settleBeforeAbort(
+      () => verify(response, { ...options, request }),
+      request.signal,
+      () => cancelUndeliveredBody(response),
+    )
+  } catch (error) {
+    cancelUndeliveredBody(response)
+    throw error
+  }
+}
+
 /**
  * Drop-in `fetch` that signs outgoing requests only. Responses are returned unverified.
  *
@@ -6449,21 +6488,7 @@ export function createSigningFetch(options: SigningFetchOptions): typeof globalT
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = createFetchRequest(input, init)
     const forwarded = runtimeFetchOptions(request, init)
-    let signedRequest: Request
-    try {
-      signedRequest = await settleBeforeAbort(
-        () => sign(request, signOptions),
-        request.signal,
-        (signed) => {
-          if (signed !== undefined) {
-            cancelUndeliveredBody(signed)
-          }
-        },
-      )
-    } catch (error) {
-      cancelUndeliveredBody(request)
-      throw error
-    }
+    const signedRequest = await signFetchRequest(request, signOptions)
     return forwarded === undefined
       ? implementation(signedRequest)
       : implementation(signedRequest, forwarded)
@@ -6526,16 +6551,7 @@ export function createVerifyingFetch(options: VerifyingFetchOptions): typeof glo
       forwarded === undefined
         ? await implementation(request)
         : await implementation(request, forwarded)
-    try {
-      await settleBeforeAbort(
-        () => verify(response, { ...verifyOptions, request }),
-        request.signal,
-        () => cancelUndeliveredBody(response),
-      )
-    } catch (error) {
-      cancelUndeliveredBody(response)
-      throw error
-    }
+    await verifyFetchResponse(response, request, verifyOptions)
     return response
   }
 }
@@ -6597,36 +6613,13 @@ export function createSignedFetch(options: SignedFetchOptions): typeof globalThi
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = createFetchRequest(input, init)
     const forwarded = runtimeFetchOptions(request, init)
-    let signedRequest: Request
-    try {
-      signedRequest = await settleBeforeAbort(
-        () => sign(request, signOptions),
-        request.signal,
-        (signed) => {
-          if (signed !== undefined) {
-            cancelUndeliveredBody(signed)
-          }
-        },
-      )
-    } catch (error) {
-      cancelUndeliveredBody(request)
-      throw error
-    }
+    const signedRequest = await signFetchRequest(request, signOptions)
     const response =
       forwarded === undefined
         ? await implementation(signedRequest)
         : await implementation(signedRequest, forwarded)
     if (verifyOptions !== undefined) {
-      try {
-        await settleBeforeAbort(
-          () => verify(response, { ...verifyOptions, request: signedRequest }),
-          signedRequest.signal,
-          () => cancelUndeliveredBody(response),
-        )
-      } catch (error) {
-        cancelUndeliveredBody(response)
-        throw error
-      }
+      await verifyFetchResponse(response, signedRequest, verifyOptions)
     }
     return response
   }
