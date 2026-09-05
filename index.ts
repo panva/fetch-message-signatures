@@ -3704,7 +3704,7 @@ function formPercentEncode(value: string): string {
 function deriveQueryParameter(derived: TargetUriDerivation, encodedName: string): string {
   if (derived.queryParameters === undefined) {
     const queryStart = derived.target.indexOf('?')
-    const query = queryStart === -1 ? '' : derived.target.slice(queryStart + 1)
+    const query = queryStart === -1 ? '' : derived.target.slice(queryStart)
     const parameters = new Map<string, string[]>()
     for (const [name, value] of new URLSearchParams(query)) {
       const encoded = formPercentEncode(name)

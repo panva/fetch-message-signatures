@@ -233,6 +233,62 @@ describe('@query-param form encoding', () => {
     )
   })
 
+  it('preserves a leading question mark in a query parameter name', () => {
+    const request = new Request('https://example.com/??action=read')
+    assert.equal(
+      createSignatureBase(request, {
+        components: [component('@query-param', { name: '%3Faction' })],
+      }),
+      [
+        '"@query-param";name="%3Faction": read',
+        '"@signature-params": ("@query-param";name="%3Faction")',
+      ].join('\n'),
+    )
+    assert.throws(
+      () =>
+        createSignatureBase(request, {
+          components: [component('@query-param', { name: 'action' })],
+        }),
+      /Query parameter "action" is not present/,
+    )
+  })
+
+  it('rejects repeated names containing a leading question mark', () => {
+    const request = new Request('https://example.com/??action=read&%3Faction=write')
+    assert.throws(
+      () =>
+        createSignatureBase(request, {
+          components: [component('@query-param', { name: '%3Faction' })],
+        }),
+      /Query parameter "%3Faction" occurs more than once/,
+    )
+  })
+
+  it('rejects moving a covered query parameter to a different name', async () => {
+    const components = [
+      '@method',
+      '@authority',
+      '@path',
+      component('@query-param', { name: 'action' }),
+    ]
+    const signed = await sign(new Request('https://example.com/?action=read'), {
+      signer: webCryptoSigner(),
+      components,
+      parameters: { created: RFC_CREATED },
+    })
+    const options = {
+      verifier: webCryptoVerifier(),
+      policy: verificationPolicy({ requiredComponents: components }),
+    }
+    assert.equal((await verify(signed, options)).label, 'sig1')
+
+    const altered = new Request('https://example.com/??action=read', { headers: signed.headers })
+    await assert.rejects(verify(altered, options), {
+      name: 'VerificationError',
+      code: 'signature_malformed',
+    })
+  })
+
   it('requires exactly one String name parameter', () => {
     assert.throws(
       () => createSignatureBase(rfcRequest(), { components: ['@query-param'] }),
