@@ -28,6 +28,7 @@ jobs:
           cache: 'npm'
           check-latest: true
       - run: npm clean-install
+      - run: node --run test:build
       - run: node --run build
       - run: node --run test:types
       - run: node --run format:check

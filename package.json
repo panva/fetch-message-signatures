@@ -48,6 +48,7 @@
     "format:check": "prettier --check '**/*.{ts,js,mjs,cjs,json,yml}' '**/*.md'",
     "test": "node --test --no-warnings test/*.ts",
     "test:browsers": "node test/browser.mjs",
+    "test:build": "node --test tools/clean-javascript.test.cjs",
     "test:bun": "bun test ./test/*.ts --path-ignore-patterns='test/e2e.ts' --path-ignore-patterns='test/frameworks.ts'",
     "test:deno": "deno test --unstable-no-legacy-abort --no-check --allow-read --allow-net=127.0.0.1 test/accept-signature-boundaries.ts test/accept-signature.ts test/algorithms.ts test/algorithms-node.ts test/descriptors.ts test/fields.ts test/rfc9421-appendix.ts test/rfc9421.ts test/structured-fields-display-string.ts test/structured-fields.ts test/robustness.ts test/runtime-e2e.ts test/signatures.ts",
     "test:dist": "node tools/test-dist.js",

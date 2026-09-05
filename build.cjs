@@ -2,6 +2,7 @@ const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { gzipSync } = require('node:zlib')
 const amaro = require('amaro')
+const cleanJavaScript = require('./tools/clean-javascript.cjs')
 
 execFileSync(process.execPath, [require.resolve('typescript/bin/tsc')], { stdio: 'inherit' })
 
@@ -12,8 +13,6 @@ javascript = cleanJavaScript(javascript)
 fs.writeFileSync('./index.js', javascript)
 const after = sizes(javascript)
 
-// Evaluated rather than only parsed. The comment stripping below is hand-rolled, so it can produce
-// a file that parses cleanly and still throws the moment it is loaded.
 execFileSync(process.execPath, ['--input-type=module', '-e', "import './index.js'"], {
   stdio: 'inherit',
 })
@@ -35,18 +34,6 @@ const declarationsAfter = sizes(declarations)
 console.log(
   `index.d.ts: ${format(declarationsBefore.raw)} → ${format(declarationsAfter.raw)} (${format(declarationsAfter.gzip)} gzip)`,
 )
-
-function cleanJavaScript(code) {
-  // Whole JSDoc blocks go first. A single-line `/** @see [x](https://…) */` contains a `//` inside
-  // its URL, so removing inline comments first would eat the closing `*/` and leave an unterminated
-  // block for the next pass to swallow along with the code after it.
-  code = code.replace(/^[ \t]*\/\*\*[\s\S]*?\*\/[ \t]*$/gm, (match) => {
-    return '\n'.repeat((match.match(/\n/g) || []).length)
-  })
-  code = code.replace(/^[ \t]*\/\/.*$/gm, '')
-  code = code.replace(/^(.+?)\/\/.*$/gm, (_match, source) => source.trimEnd())
-  return code.replace(/^[ \t]+$/gm, '')
-}
 
 /**
  * Removes the `@example` blocks from the emitted declarations.
