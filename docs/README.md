@@ -158,8 +158,17 @@ plus a `verify` block, and checks the response against the exact request that pr
 | [generateEcdsaP256Sha256KeyPair](functions/generateEcdsaP256Sha256KeyPair.md) | Generates an ECDSA P-256 key pair for the RFC 9421 `ecdsa-p256-sha256` algorithm. |
 | [generateEcdsaP384Sha384KeyPair](functions/generateEcdsaP384Sha384KeyPair.md) | Generates an ECDSA P-384 key pair for the RFC 9421 `ecdsa-p384-sha384` algorithm. |
 | [generateEd25519KeyPair](functions/generateEd25519KeyPair.md) | Generates an Ed25519 key pair for the RFC 9421 `ed25519` algorithm. |
+| [generateMlDsa44KeyPair](functions/generateMlDsa44KeyPair.md) | Generates an ML-DSA-44 key pair for the `ml-dsa-44` HTTP Message Signatures algorithm. |
+| [generateMlDsa65KeyPair](functions/generateMlDsa65KeyPair.md) | Generates an ML-DSA-65 key pair for the `ml-dsa-65` HTTP Message Signatures algorithm. |
+| [generateMlDsa87KeyPair](functions/generateMlDsa87KeyPair.md) | Generates an ML-DSA-87 key pair for the `ml-dsa-87` HTTP Message Signatures algorithm. |
 | [generateRsaPssSha512KeyPair](functions/generateRsaPssSha512KeyPair.md) | Generates an RSA key pair for the RFC 9421 `rsa-pss-sha512` algorithm. |
 | [generateRsaV1\_5Sha256KeyPair](functions/generateRsaV1_5Sha256KeyPair.md) | Generates an RSA key pair for the RFC 9421 `rsa-v1_5-sha256` algorithm. |
+| [mlDsa44Signer](functions/mlDsa44Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for `ml-dsa-44`. |
+| [mlDsa44Verifier](functions/mlDsa44Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for `ml-dsa-44`. |
+| [mlDsa65Signer](functions/mlDsa65Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for `ml-dsa-65`. |
+| [mlDsa65Verifier](functions/mlDsa65Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for `ml-dsa-65`. |
+| [mlDsa87Signer](functions/mlDsa87Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for `ml-dsa-87`. |
+| [mlDsa87Verifier](functions/mlDsa87Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for `ml-dsa-87`. |
 | [rsaPssSha512Signer](functions/rsaPssSha512Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `rsa-pss-sha512`. |
 | [rsaPssSha512Verifier](functions/rsaPssSha512Verifier.md) | Creates a fixed-key verifier factory backed by Web Cryptography for RFC 9421 `rsa-pss-sha512`. |
 | [rsaV1\_5Sha256Signer](functions/rsaV1_5Sha256Signer.md) | Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `rsa-v1_5-sha256`. |

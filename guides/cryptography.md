@@ -1,27 +1,40 @@
 # Cryptographic providers
 
 `fetch-message-signatures` includes key-pair generators, signer factories, and verifier factories
-backed by Web Cryptography for ECDSA P-256, ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and
-RSASSA-PKCS1-v1_5 with SHA-256. HMAC and other cryptographic implementations plug into sender and
-recipient operations through the same small provider interfaces. A `SignerFactory` returns a signer
-with `alg` and a `sign()` method. A `VerifierFactory` selects trusted key material and returns a
-verifier with `alg` and a `verify()` method.
+backed by Web Cryptography for ECDSA P-256, ECDSA P-384, Ed25519, ML-DSA-44, ML-DSA-65, ML-DSA-87,
+RSA-PSS with SHA-512, and RSASSA-PKCS1-v1_5 with SHA-256. HMAC and other cryptographic
+implementations plug into sender and recipient operations through the same small provider
+interfaces. A `SignerFactory` returns a signer with `alg` and a `sign()` method. A `VerifierFactory`
+selects trusted key material and returns a verifier with `alg` and a `verify()` method.
 
-The exported algorithm functions map RFC algorithm identifiers to Web Cryptography parameters and
-signature encoding. The application remains responsible for persistent key storage, key rotation,
-trusted-key lookup, and authorization.
+The exported algorithm functions map HTTP signature algorithm identifiers to Web Cryptography
+parameters and signature encoding. The application remains responsible for persistent key storage,
+key rotation, trusted-key lookup, and authorization.
 
 ## Built-in Web Cryptography algorithms
 
 Each built-in algorithm has one key generator, one signer factory, and one verifier factory.
 
-| RFC 9421 algorithm  | Key generator                                                                           | Signer / verifier                                                                                                                                 |
-| ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ecdsa-p256-sha256` | [`generateEcdsaP256Sha256KeyPair`](../docs/functions/generateEcdsaP256Sha256KeyPair.md) | [`ecdsaP256Sha256Signer`](../docs/functions/ecdsaP256Sha256Signer.md) / [`ecdsaP256Sha256Verifier`](../docs/functions/ecdsaP256Sha256Verifier.md) |
-| `ecdsa-p384-sha384` | [`generateEcdsaP384Sha384KeyPair`](../docs/functions/generateEcdsaP384Sha384KeyPair.md) | [`ecdsaP384Sha384Signer`](../docs/functions/ecdsaP384Sha384Signer.md) / [`ecdsaP384Sha384Verifier`](../docs/functions/ecdsaP384Sha384Verifier.md) |
-| `ed25519`           | [`generateEd25519KeyPair`](../docs/functions/generateEd25519KeyPair.md)                 | [`ed25519Signer`](../docs/functions/ed25519Signer.md) / [`ed25519Verifier`](../docs/functions/ed25519Verifier.md)                                 |
-| `rsa-pss-sha512`    | [`generateRsaPssSha512KeyPair`](../docs/functions/generateRsaPssSha512KeyPair.md)       | [`rsaPssSha512Signer`](../docs/functions/rsaPssSha512Signer.md) / [`rsaPssSha512Verifier`](../docs/functions/rsaPssSha512Verifier.md)             |
-| `rsa-v1_5-sha256`   | [`generateRsaV1_5Sha256KeyPair`](../docs/functions/generateRsaV1_5Sha256KeyPair.md)     | [`rsaV1_5Sha256Signer`](../docs/functions/rsaV1_5Sha256Signer.md) / [`rsaV1_5Sha256Verifier`](../docs/functions/rsaV1_5Sha256Verifier.md)         |
+| HTTP signature algorithm | Key generator                                                                           | Signer / verifier                                                                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ecdsa-p256-sha256`      | [`generateEcdsaP256Sha256KeyPair`](../docs/functions/generateEcdsaP256Sha256KeyPair.md) | [`ecdsaP256Sha256Signer`](../docs/functions/ecdsaP256Sha256Signer.md) / [`ecdsaP256Sha256Verifier`](../docs/functions/ecdsaP256Sha256Verifier.md) |
+| `ecdsa-p384-sha384`      | [`generateEcdsaP384Sha384KeyPair`](../docs/functions/generateEcdsaP384Sha384KeyPair.md) | [`ecdsaP384Sha384Signer`](../docs/functions/ecdsaP384Sha384Signer.md) / [`ecdsaP384Sha384Verifier`](../docs/functions/ecdsaP384Sha384Verifier.md) |
+| `ed25519`                | [`generateEd25519KeyPair`](../docs/functions/generateEd25519KeyPair.md)                 | [`ed25519Signer`](../docs/functions/ed25519Signer.md) / [`ed25519Verifier`](../docs/functions/ed25519Verifier.md)                                 |
+| `ml-dsa-44`              | [`generateMlDsa44KeyPair`](../docs/functions/generateMlDsa44KeyPair.md)                 | [`mlDsa44Signer`](../docs/functions/mlDsa44Signer.md) / [`mlDsa44Verifier`](../docs/functions/mlDsa44Verifier.md)                                 |
+| `ml-dsa-65`              | [`generateMlDsa65KeyPair`](../docs/functions/generateMlDsa65KeyPair.md)                 | [`mlDsa65Signer`](../docs/functions/mlDsa65Signer.md) / [`mlDsa65Verifier`](../docs/functions/mlDsa65Verifier.md)                                 |
+| `ml-dsa-87`              | [`generateMlDsa87KeyPair`](../docs/functions/generateMlDsa87KeyPair.md)                 | [`mlDsa87Signer`](../docs/functions/mlDsa87Signer.md) / [`mlDsa87Verifier`](../docs/functions/mlDsa87Verifier.md)                                 |
+| `rsa-pss-sha512`         | [`generateRsaPssSha512KeyPair`](../docs/functions/generateRsaPssSha512KeyPair.md)       | [`rsaPssSha512Signer`](../docs/functions/rsaPssSha512Signer.md) / [`rsaPssSha512Verifier`](../docs/functions/rsaPssSha512Verifier.md)             |
+| `rsa-v1_5-sha256`        | [`generateRsaV1_5Sha256KeyPair`](../docs/functions/generateRsaV1_5Sha256KeyPair.md)     | [`rsaV1_5Sha256Signer`](../docs/functions/rsaV1_5Sha256Signer.md) / [`rsaV1_5Sha256Verifier`](../docs/functions/rsaV1_5Sha256Verifier.md)         |
+
+The ML-DSA identifiers are defined by
+[Post-Quantum Algorithms for HTTP Message Signatures](https://c2sp.org/httpsig-pq@v1.0.1). They map
+to Web Cryptography's `ML-DSA-44`, `ML-DSA-65`, and `ML-DSA-87`, respectively. Each signs the
+unchanged signature-base bytes with pure ML-DSA and an empty context. Signatures are the raw 2420-,
+3309-, and 4627-byte values, respectively, without additional encoding or prehashing.
+
+ML-DSA requires runtime support for the corresponding Web Cryptography algorithm; Node.js added
+support in [v24.7.0](https://nodejs.org/api/webcrypto.html#web-crypto-api). If the runtime does not
+support an algorithm, Web Cryptography rejects the operation with `NotSupportedError`.
 
 ## Keys
 
@@ -55,11 +68,11 @@ verifier factories accept a key of any modulus length, so a key that comes from 
 have to match the default.
 
 Imported, deserialized, and hardware-backed instances of Web Cryptography's `CryptoKey` work with
-the same factories. Import the key using the Web Cryptography algorithm that matches the RFC
-identifier. ECDSA keys also bind their named curve, and RSA keys their digest. Common import formats
-are `spki` for an asymmetric public key, `pkcs8` for an asymmetric private key, and `jwk` when the
-surrounding protocol defines JWK use. RFC 9421 does not define public-key formats or key
-distribution.
+the same factories. Import the key using the Web Cryptography algorithm that matches the HTTP
+signature identifier. ECDSA keys also bind their named curve, and RSA keys their digest. Common
+import formats are `spki` for an asymmetric public key, `pkcs8` for an asymmetric private key, and
+`jwk` when the surrounding protocol defines JWK use. RFC 9421 does not define public-key formats or
+key distribution.
 
 For example, an Ed25519 key pair can be used directly:
 
@@ -74,8 +87,8 @@ fixed by the surrounding context.
 
 ## Algorithm metadata and key selection
 
-A built-in verifier binds one trusted key to one RFC algorithm. Key lookup and authorization belong
-in the application verifier factory:
+A built-in verifier binds one trusted key to one HTTP signature algorithm. Key lookup and
+authorization belong in the application verifier factory:
 
 ```ts
 declare const privateKey: CryptoKey
@@ -113,7 +126,8 @@ reaches must come from configuration rather than from the message.
 Built-in signer and verifier functions synchronously validate the key type, required usage, Web
 Cryptography algorithm, named curve, and digest. A P-384 ECDSA key therefore cannot be used with the
 `ecdsa-p256-sha256` identifier, and an RSA-PSS key created for SHA-256 cannot be used with
-`rsa-pss-sha512`.
+`rsa-pss-sha512`. An ML-DSA key must match the full parameter set, so an `ML-DSA-65` key cannot be
+used with `ml-dsa-44`.
 
 ## Custom providers
 

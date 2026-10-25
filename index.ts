@@ -700,7 +700,7 @@ function readProperty(value: unknown, property: string): unknown {
 
 /**
  * Reports whether a `CryptoKey` matches the type, usage, Web Cryptography algorithm, named curve,
- * and digest required by one RFC 9421 algorithm identifier.
+ * and digest required by one HTTP Message Signatures algorithm identifier.
  *
  * The digest is part of the identifier for the RSA algorithms, and a `CryptoKey` binds it at import
  * or generation time. An RSA-PSS key created for SHA-256 is therefore rejected by the
@@ -734,8 +734,8 @@ function isAlgorithmKey(key: CryptoKey, expected: AlgorithmKeyExpectation): bool
 }
 
 /**
- * Rejects a `CryptoKey` that does not match the expectation for one RFC 9421 algorithm identifier,
- * naming the identifier, key type, and usage that were required.
+ * Rejects a `CryptoKey` that does not match the expectation for one HTTP Message Signatures
+ * algorithm identifier, naming the identifier, key type, and usage that were required.
  */
 function assertAlgorithmKey(key: CryptoKey, expected: AlgorithmKeyExpectation): void {
   if (!isAlgorithmKey(key, expected)) {
@@ -1049,6 +1049,179 @@ export function ed25519Verifier(key: CryptoKey): SynchronousVerifierFactory {
     key,
     { identifier: 'ed25519', type: 'public', usage: 'verify', algorithm: 'Ed25519' },
     'Ed25519',
+  )
+}
+
+/**
+ * Generates an ML-DSA-44 key pair for the `ml-dsa-44` HTTP Message Signatures algorithm.
+ *
+ * Requires a Web Cryptography implementation that supports `ML-DSA-44`. The generated public key is
+ * represented by Web Cryptography's `CryptoKey` and is always extractable.
+ *
+ * @param extractable - Whether the private key can be exported. Defaults to `false`.
+ *
+ * @returns A randomly generated signing and verification key pair.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export async function generateMlDsa44KeyPair(extractable?: boolean): Promise<CryptoKeyPair> {
+  return generateWebCryptoKeyPair('ML-DSA-44', extractable)
+}
+
+/**
+ * Creates a fixed-key signer factory backed by Web Cryptography for `ml-dsa-44`.
+ *
+ * The message is signed directly with pure ML-DSA-44 and an empty context, without an external
+ * pre-hash. Signatures use the 2420-byte FIPS 204 encoding.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an ML-DSA-44 private key with `sign` usage.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export function mlDsa44Signer(key: CryptoKey): SignerFactory {
+  return createWebCryptoSignerFactory(
+    key,
+    { identifier: 'ml-dsa-44', type: 'private', usage: 'sign', algorithm: 'ML-DSA-44' },
+    'ML-DSA-44',
+  )
+}
+
+/**
+ * Creates a fixed-key verifier factory backed by Web Cryptography for `ml-dsa-44`.
+ *
+ * The message is verified directly with pure ML-DSA-44 and an empty context, without an external
+ * pre-hash. Signatures use the 2420-byte FIPS 204 encoding. This fixed-key factory does not perform
+ * `keyid` lookup or authorization. Select it from trusted application configuration when more than
+ * one verification key can be used.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an ML-DSA-44 public key with `verify` usage.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export function mlDsa44Verifier(key: CryptoKey): SynchronousVerifierFactory {
+  return createWebCryptoVerifierFactory(
+    key,
+    { identifier: 'ml-dsa-44', type: 'public', usage: 'verify', algorithm: 'ML-DSA-44' },
+    'ML-DSA-44',
+  )
+}
+
+/**
+ * Generates an ML-DSA-65 key pair for the `ml-dsa-65` HTTP Message Signatures algorithm.
+ *
+ * Requires a Web Cryptography implementation that supports `ML-DSA-65`. The generated public key is
+ * represented by Web Cryptography's `CryptoKey` and is always extractable.
+ *
+ * @example
+ *
+ * Generate a pair and turn it into the sender and recipient providers.
+ *
+ * ```ts
+ * const { privateKey, publicKey } = await FetchSig.generateMlDsa65KeyPair()
+ *
+ * const signer = FetchSig.mlDsa65Signer(privateKey)
+ * const verifier = FetchSig.mlDsa65Verifier(publicKey)
+ * ```
+ *
+ * @param extractable - Whether the private key can be exported. Defaults to `false`.
+ *
+ * @returns A randomly generated signing and verification key pair.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export async function generateMlDsa65KeyPair(extractable?: boolean): Promise<CryptoKeyPair> {
+  return generateWebCryptoKeyPair('ML-DSA-65', extractable)
+}
+
+/**
+ * Creates a fixed-key signer factory backed by Web Cryptography for `ml-dsa-65`.
+ *
+ * The message is signed directly with pure ML-DSA-65 and an empty context, without an external
+ * pre-hash. Signatures use the 3309-byte FIPS 204 encoding.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an ML-DSA-65 private key with `sign` usage.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export function mlDsa65Signer(key: CryptoKey): SignerFactory {
+  return createWebCryptoSignerFactory(
+    key,
+    { identifier: 'ml-dsa-65', type: 'private', usage: 'sign', algorithm: 'ML-DSA-65' },
+    'ML-DSA-65',
+  )
+}
+
+/**
+ * Creates a fixed-key verifier factory backed by Web Cryptography for `ml-dsa-65`.
+ *
+ * The message is verified directly with pure ML-DSA-65 and an empty context, without an external
+ * pre-hash. Signatures use the 3309-byte FIPS 204 encoding. This fixed-key factory does not perform
+ * `keyid` lookup or authorization. Select it from trusted application configuration when more than
+ * one verification key can be used.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an ML-DSA-65 public key with `verify` usage.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export function mlDsa65Verifier(key: CryptoKey): SynchronousVerifierFactory {
+  return createWebCryptoVerifierFactory(
+    key,
+    { identifier: 'ml-dsa-65', type: 'public', usage: 'verify', algorithm: 'ML-DSA-65' },
+    'ML-DSA-65',
+  )
+}
+
+/**
+ * Generates an ML-DSA-87 key pair for the `ml-dsa-87` HTTP Message Signatures algorithm.
+ *
+ * Requires a Web Cryptography implementation that supports `ML-DSA-87`. The generated public key is
+ * represented by Web Cryptography's `CryptoKey` and is always extractable.
+ *
+ * @param extractable - Whether the private key can be exported. Defaults to `false`.
+ *
+ * @returns A randomly generated signing and verification key pair.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export async function generateMlDsa87KeyPair(extractable?: boolean): Promise<CryptoKeyPair> {
+  return generateWebCryptoKeyPair('ML-DSA-87', extractable)
+}
+
+/**
+ * Creates a fixed-key signer factory backed by Web Cryptography for `ml-dsa-87`.
+ *
+ * The message is signed directly with pure ML-DSA-87 and an empty context, without an external
+ * pre-hash. Signatures use the 4627-byte FIPS 204 encoding.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an ML-DSA-87 private key with `sign` usage.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export function mlDsa87Signer(key: CryptoKey): SignerFactory {
+  return createWebCryptoSignerFactory(
+    key,
+    { identifier: 'ml-dsa-87', type: 'private', usage: 'sign', algorithm: 'ML-DSA-87' },
+    'ML-DSA-87',
+  )
+}
+
+/**
+ * Creates a fixed-key verifier factory backed by Web Cryptography for `ml-dsa-87`.
+ *
+ * The message is verified directly with pure ML-DSA-87 and an empty context, without an external
+ * pre-hash. Signatures use the 4627-byte FIPS 204 encoding. This fixed-key factory does not perform
+ * `keyid` lookup or authorization. Select it from trusted application configuration when more than
+ * one verification key can be used.
+ *
+ * @param key - Web Cryptography's `CryptoKey` for an ML-DSA-87 public key with `verify` usage.
+ * @group Cryptographic Algorithms
+ * @see https://c2sp.org/httpsig-pq@v1.0.1
+ */
+export function mlDsa87Verifier(key: CryptoKey): SynchronousVerifierFactory {
+  return createWebCryptoVerifierFactory(
+    key,
+    { identifier: 'ml-dsa-87', type: 'public', usage: 'verify', algorithm: 'ML-DSA-87' },
+    'ML-DSA-87',
   )
 }
 

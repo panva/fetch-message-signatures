@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  createSignatureBase,
   ecdsaP256Sha256Signer,
   ecdsaP256Sha256Verifier,
   ecdsaP384Sha384Signer,
@@ -11,8 +12,17 @@ import {
   generateEcdsaP256Sha256KeyPair,
   generateEcdsaP384Sha384KeyPair,
   generateEd25519KeyPair,
+  generateMlDsa44KeyPair,
+  generateMlDsa65KeyPair,
+  generateMlDsa87KeyPair,
   generateRsaPssSha512KeyPair,
   generateRsaV1_5Sha256KeyPair,
+  mlDsa44Signer,
+  mlDsa44Verifier,
+  mlDsa65Signer,
+  mlDsa65Verifier,
+  mlDsa87Signer,
+  mlDsa87Verifier,
   rsaPssSha512Signer,
   rsaPssSha512Verifier,
   rsaV1_5Sha256Signer,
@@ -24,6 +34,8 @@ import {
   type SynchronousVerifierFactory,
   type VerificationContext,
 } from '../index.ts'
+import { pqVectors } from './fixtures/httpsig-pq.ts'
+import { base64ToBytes, fixtureRequest } from './support.ts'
 
 interface KeyMaterial {
   readonly signingKey: CryptoKey
@@ -33,6 +45,7 @@ interface KeyMaterial {
 interface AlgorithmCase {
   readonly identifier: string
   readonly signatureLength: number
+  readonly optionalWebCryptoAlgorithm?: string
   readonly generate: (extractable?: boolean) => Promise<KeyMaterial>
   readonly signer: (key: CryptoKey) => SignerFactory
   readonly verifier: (key: CryptoKey) => SynchronousVerifierFactory
@@ -46,6 +59,51 @@ function ecAlgorithm(key: CryptoKey): EcKeyAlgorithm {
 function rsaAlgorithm(key: CryptoKey): RsaHashedKeyAlgorithm {
   return key.algorithm as RsaHashedKeyAlgorithm
 }
+
+const pqAlgorithms: ReadonlyArray<AlgorithmCase> = [
+  {
+    identifier: 'ml-dsa-44',
+    signatureLength: 2420,
+    optionalWebCryptoAlgorithm: 'ML-DSA-44',
+    async generate(extractable) {
+      const pair = await generateMlDsa44KeyPair(extractable)
+      return { signingKey: pair.privateKey, verificationKey: pair.publicKey }
+    },
+    signer: mlDsa44Signer,
+    verifier: mlDsa44Verifier,
+    assertAlgorithm(key) {
+      assert.equal(key.algorithm.name, 'ML-DSA-44')
+    },
+  },
+  {
+    identifier: 'ml-dsa-65',
+    signatureLength: 3309,
+    optionalWebCryptoAlgorithm: 'ML-DSA-65',
+    async generate(extractable) {
+      const pair = await generateMlDsa65KeyPair(extractable)
+      return { signingKey: pair.privateKey, verificationKey: pair.publicKey }
+    },
+    signer: mlDsa65Signer,
+    verifier: mlDsa65Verifier,
+    assertAlgorithm(key) {
+      assert.equal(key.algorithm.name, 'ML-DSA-65')
+    },
+  },
+  {
+    identifier: 'ml-dsa-87',
+    signatureLength: 4627,
+    optionalWebCryptoAlgorithm: 'ML-DSA-87',
+    async generate(extractable) {
+      const pair = await generateMlDsa87KeyPair(extractable)
+      return { signingKey: pair.privateKey, verificationKey: pair.publicKey }
+    },
+    signer: mlDsa87Signer,
+    verifier: mlDsa87Verifier,
+    assertAlgorithm(key) {
+      assert.equal(key.algorithm.name, 'ML-DSA-87')
+    },
+  },
+]
 
 const algorithms: ReadonlyArray<AlgorithmCase> = [
   {
@@ -125,6 +183,7 @@ const algorithms: ReadonlyArray<AlgorithmCase> = [
       assert.deepEqual(new Uint8Array(algorithm.publicExponent), new Uint8Array([1, 0, 1]))
     },
   },
+  ...pqAlgorithms,
 ]
 
 function algorithmCase(identifier: string): AlgorithmCase {
@@ -142,6 +201,31 @@ function keysFor(algorithm: AlgorithmCase): Promise<KeyMaterial> {
     defaultKeyMaterial.set(algorithm.identifier, keys)
   }
   return keys
+}
+
+let supportedAlgorithmCases: Promise<ReadonlyArray<AlgorithmCase>> | undefined
+
+/** Probe the native algorithm so that a broken helper cannot be mistaken for missing support. */
+function supportedAlgorithms(): Promise<ReadonlyArray<AlgorithmCase>> {
+  supportedAlgorithmCases ??= Promise.all(
+    algorithms.map(async (algorithm) => {
+      if (algorithm.optionalWebCryptoAlgorithm !== undefined) {
+        try {
+          await crypto.subtle.generateKey(algorithm.optionalWebCryptoAlgorithm, false, [
+            'sign',
+            'verify',
+          ])
+        } catch (error) {
+          if (error instanceof Error && error.name === 'NotSupportedError') {
+            return undefined
+          }
+          throw error
+        }
+      }
+      return algorithm
+    }),
+  ).then((supported) => supported.filter((algorithm) => algorithm !== undefined))
+  return supportedAlgorithmCases
 }
 
 const providerSignature: MessageSignature = {
@@ -181,17 +265,19 @@ function assertKeyMetadata(
 
 describe('Web Cryptography algorithm helpers', () => {
   it('generates non-extractable signing keys by default with the expected metadata and usages', async () => {
-    const generated = await Promise.all(algorithms.map(keysFor))
+    const supported = await supportedAlgorithms()
+    const generated = await Promise.all(supported.map(keysFor))
 
-    for (const [index, algorithm] of algorithms.entries()) {
+    for (const [index, algorithm] of supported.entries()) {
       assertKeyMetadata(algorithm, generated[index]!, false)
     }
   })
 
   it('generates extractable keys only when requested', async () => {
-    const generated = await Promise.all(algorithms.map((algorithm) => algorithm.generate(true)))
+    const supported = await supportedAlgorithms()
+    const generated = await Promise.all(supported.map((algorithm) => algorithm.generate(true)))
 
-    for (const [index, algorithm] of algorithms.entries()) {
+    for (const [index, algorithm] of supported.entries()) {
       assertKeyMetadata(algorithm, generated[index]!, true)
     }
   })
@@ -213,7 +299,7 @@ describe('Web Cryptography algorithm helpers', () => {
   })
 
   it('signs and verifies bytes with every built-in algorithm', async () => {
-    for (const algorithm of algorithms) {
+    for (const algorithm of await supportedAlgorithms()) {
       const keys = await keysFor(algorithm)
       const signerFactory = algorithm.signer(keys.signingKey)
       const verifierFactory = algorithm.verifier(keys.verificationKey)
@@ -233,7 +319,7 @@ describe('Web Cryptography algorithm helpers', () => {
   })
 
   it('round trips complete HTTP message signatures with every built-in algorithm', async () => {
-    for (const algorithm of algorithms) {
+    for (const algorithm of await supportedAlgorithms()) {
       const keys = await keysFor(algorithm)
       const signed = await sign(
         new Request(`https://api.example/${algorithm.identifier}?page=1`, {
@@ -269,7 +355,7 @@ describe('Web Cryptography algorithm helpers', () => {
   })
 
   it('rejects public signing keys and private verification keys synchronously', async () => {
-    for (const algorithm of algorithms) {
+    for (const algorithm of await supportedAlgorithms()) {
       const keys = await keysFor(algorithm)
       assert.throws(
         () => algorithm.signer(keys.verificationKey),
@@ -283,23 +369,124 @@ describe('Web Cryptography algorithm helpers', () => {
   })
 
   it('rejects keys without the required usage synchronously', async () => {
-    const p256 = algorithmCase('ecdsa-p256-sha256')
-    const keys = await keysFor(p256)
-    const privateKeyWithoutSign: CryptoKey = {
-      algorithm: keys.signingKey.algorithm,
-      extractable: keys.signingKey.extractable,
-      type: keys.signingKey.type,
-      usages: [],
-    }
-    const publicKeyWithoutVerify: CryptoKey = {
-      algorithm: keys.verificationKey.algorithm,
-      extractable: keys.verificationKey.extractable,
-      type: keys.verificationKey.type,
-      usages: [],
-    }
+    for (const algorithm of await supportedAlgorithms()) {
+      const keys = await keysFor(algorithm)
+      const privateKeyWithoutSign: CryptoKey = {
+        algorithm: keys.signingKey.algorithm,
+        extractable: keys.signingKey.extractable,
+        type: keys.signingKey.type,
+        usages: [],
+      }
+      const publicKeyWithoutVerify: CryptoKey = {
+        algorithm: keys.verificationKey.algorithm,
+        extractable: keys.verificationKey.extractable,
+        type: keys.verificationKey.type,
+        usages: [],
+      }
 
-    assert.throws(() => p256.signer(privateKeyWithoutSign), /with "sign" usage/)
-    assert.throws(() => p256.verifier(publicKeyWithoutVerify), /with "verify" usage/)
+      assert.throws(() => algorithm.signer(privateKeyWithoutSign), /with "sign" usage/)
+      assert.throws(() => algorithm.verifier(publicKeyWithoutVerify), /with "verify" usage/)
+    }
+  })
+
+  it('rejects ML-DSA keys for another parameter set synchronously even on unsupported runtimes', () => {
+    for (const expected of pqAlgorithms) {
+      for (const other of pqAlgorithms) {
+        if (expected === other) {
+          continue
+        }
+        const key: CryptoKey = {
+          algorithm: { name: other.identifier.toUpperCase() },
+          extractable: false,
+          type: 'private',
+          usages: ['sign'],
+        }
+        assert.throws(() => expected.signer(key), new RegExp(expected.identifier))
+        assert.throws(
+          () => expected.verifier({ ...key, type: 'public', usages: ['verify'] }),
+          new RegExp(expected.identifier),
+        )
+      }
+    }
+  })
+
+  it('rejects malformed ML-DSA signatures, non-empty contexts, and external pre-hashing', async () => {
+    for (const algorithm of await supportedAlgorithms()) {
+      if (algorithm.optionalWebCryptoAlgorithm === undefined) {
+        continue
+      }
+      const keys = await keysFor(algorithm)
+      const signer = algorithm.signer(keys.signingKey)()
+      const verifier = algorithm.verifier(keys.verificationKey)(providerSignature, providerContext)
+      const signature = new Uint8Array(await signer.sign(message))
+      const modified = new Uint8Array(signature)
+      modified[0] = modified[0]! ^ 1
+      const extended = new Uint8Array(signature.length + 1)
+      extended.set(signature)
+      for (const malformed of [new Uint8Array(), modified, signature.slice(1), extended]) {
+        assert.equal(await verifier.verify(message, malformed), false)
+      }
+
+      const name = keys.signingKey.algorithm.name
+      const context = new TextEncoder().encode('HTTP Message Signatures')
+      assert.equal(
+        await crypto.subtle.verify(
+          { name, context } as Algorithm,
+          keys.verificationKey,
+          signature,
+          message,
+        ),
+        false,
+      )
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-512', message))
+      assert.equal(await verifier.verify(digest, signature), false)
+      const overDigest = await crypto.subtle.sign(name, keys.signingKey, digest)
+      assert.equal(await verifier.verify(message, new Uint8Array(overDigest)), false)
+    }
+  })
+
+  it('recreates and verifies all C2SP httpsig-pq v1.0.1 conformance vectors', async () => {
+    const supported = await supportedAlgorithms()
+    for (const vector of pqVectors) {
+      const request = fixtureRequest('https://example.com/foo?param=Value&Pet=dog', {
+        headers: { host: 'example.com', date: 'Mon, 06 Jul 2026 20:00:00 GMT' },
+      })
+      const components = ['@method', '@target-uri', 'host', 'date']
+      const created = 1_783_368_000
+      const keyid = `test-key-mldsa${vector.algorithm.slice(-2)}`
+      assert.equal(
+        createSignatureBase(request, {
+          components,
+          parameters: { created, keyid, alg: vector.algorithm },
+        }),
+        new TextDecoder().decode(base64ToBytes(vector.signatureBase)),
+      )
+
+      if (!supported.some((algorithm) => algorithm.identifier === vector.algorithm)) {
+        continue
+      }
+      const algorithm = algorithmCase(vector.algorithm)
+      const publicKey = await crypto.subtle.importKey(
+        'spki',
+        base64ToBytes(vector.publicKeySpki),
+        vector.algorithm.toUpperCase(),
+        false,
+        ['verify'],
+      )
+      request.headers.set('signature-input', vector.signatureInput)
+      request.headers.set('signature', `sig1=:${vector.signature}:`)
+      const verified = await verify(request, {
+        verifier: algorithm.verifier(publicKey),
+        policy: {
+          requiredComponents: components,
+          requiredParameters: ['created', 'keyid', 'alg'],
+          algorithms: [vector.algorithm],
+          now: created,
+          maxAge: 60,
+        },
+      })
+      assert.equal(verified.algorithm, vector.algorithm)
+    }
   })
 
   it('rejects ECDSA keys on the wrong curve synchronously', async () => {

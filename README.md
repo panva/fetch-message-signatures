@@ -149,7 +149,8 @@ repeated field lines, trailers, and response reconstruction, is documented in
 - Sign requests and responses.
 - Verify one or more message signatures against explicit recipient policy.
 - Generate key pairs containing Web Cryptography's `CryptoKey` objects and providers for ECDSA
-  P-256, ECDSA P-384, Ed25519, RSA-PSS with SHA-512, and RSASSA-PKCS1-v1_5 with SHA-256.
+  P-256, ECDSA P-384, Ed25519, ML-DSA-44, ML-DSA-65, ML-DSA-87, RSA-PSS with SHA-512, and
+  RSASSA-PKCS1-v1_5 with SHA-256.
 - Bind a response signature to components of its related request.
 - Create, parse, append, and fulfill `Accept-Signature` requests.
 - Derive RFC 9421 request and response components from Fetch messages or plain descriptors.
@@ -162,10 +163,11 @@ repeated field lines, trailers, and response reconstruction, is documented in
 
 `fetch-message-signatures` includes tree-shakeable key-pair generators, signer factories, and
 verifier factories backed by Web Cryptography for `ecdsa-p256-sha256`, `ecdsa-p384-sha384`,
-`ed25519`, `rsa-pss-sha512`, and `rsa-v1_5-sha256`. Other algorithm identifiers and key systems,
-including `hmac-sha256`, can be supplied through the [`Signer`](docs/interfaces/Signer.md) and
-[`Verifier`](docs/interfaces/Verifier.md) interfaces. Applications choose trusted keys, algorithms,
-and authorization policy.
+`ed25519`, `ml-dsa-44`, `ml-dsa-65`, `ml-dsa-87`, `rsa-pss-sha512`, and `rsa-v1_5-sha256`. ML-DSA
+requires runtime support for the corresponding Web Cryptography algorithm. Other algorithm
+identifiers and key systems, including `hmac-sha256`, can be supplied through the
+[`Signer`](docs/interfaces/Signer.md) and [`Verifier`](docs/interfaces/Verifier.md) interfaces.
+Applications choose trusted keys, algorithms, and authorization policy.
 
 The [cryptographic providers guide](guides/cryptography.md) documents the exact algorithm mappings,
 key extractability, signature parameter handling, and custom provider contract. Exported functions
