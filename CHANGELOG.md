@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.2](https://github.com/panva/fetch-message-signatures/compare/v0.1.1...v0.1.2) (2026-10-25)
+
+### Features
+
+* add ML-DSA signature algorithms ([c8526d9](https://github.com/panva/fetch-message-signatures/commit/c8526d96b40ecf0980113fa5c4773eb63d184691))
+
 ## [0.1.1](https://github.com/panva/fetch-message-signatures/compare/v0.1.0...v0.1.1) (2026-09-05)
 
 ### Fixes
