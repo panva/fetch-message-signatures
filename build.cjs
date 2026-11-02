@@ -1,10 +1,12 @@
 const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { gzipSync } = require('node:zlib')
+const { dirname, join } = require('node:path')
 const amaro = require('amaro')
 const cleanJavaScript = require('./tools/clean-javascript.cjs')
 
-execFileSync(process.execPath, [require.resolve('typescript/bin/tsc')], { stdio: 'inherit' })
+const compiler = join(dirname(require.resolve('@typescript/native/package.json')), 'bin', 'tsc')
+execFileSync(process.execPath, [compiler], { stdio: 'inherit' })
 
 let javascript = amaro.transformSync(fs.readFileSync('./index.ts'), { mode: 'strip-only' }).code
 

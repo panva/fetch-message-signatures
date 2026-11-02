@@ -62,7 +62,8 @@
     "@hono/node-server": "^2.1.1",
     "@types/express": "^5.0.6",
     "@types/koa": "^3.0.3",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.6.6",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "amaro": "^1.1.11",
     "esbuild": "^0.28.2",
     "express": "^5.2.1",
@@ -79,7 +80,7 @@
     "typedoc": "^0.28.20",
     "typedoc-plugin-markdown": "^4.13.0",
     "typedoc-plugin-remark": "^2.0.1",
-    "typescript": "^6.0.3"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "publishConfig": {
     "access": "public"

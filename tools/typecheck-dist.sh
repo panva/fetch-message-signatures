@@ -27,7 +27,9 @@ echo "module resolution modes"
 run --module preserve --moduleResolution bundler --lib esnext,dom,dom.iterable
 run --module node16 --moduleResolution node16 --lib esnext,dom,dom.iterable
 run --module nodenext --moduleResolution nodenext --lib esnext,dom,dom.iterable
-run --module commonjs --moduleResolution node10 --ignoreDeprecations 6.0 --lib esnext,dom,dom.iterable
+# TypeScript 7 removed node10 resolution; retain this legacy consumer check with the API compiler.
+./node_modules/.bin/tsc6 $BASE --module commonjs --moduleResolution node10 \
+  --ignoreDeprecations 6.0 --lib esnext,dom,dom.iterable $ENTRY
 
 echo "supported consumer lib configurations"
 # Browsers, Deno, Bun, Cloudflare Workers: DOM lib, no @types/node.
