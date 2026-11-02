@@ -1,6 +1,6 @@
 # Type Alias: StructuredFieldDictionary
 
-> **StructuredFieldDictionary** = `ReadonlyArray`\<readonly \[`string`, [`StructuredFieldMember`](StructuredFieldMember.md)]>
+> **StructuredFieldDictionary** = `ReadonlyArray`\<readonly \[`name`: `string`, `value`: [`StructuredFieldMember`](StructuredFieldMember.md)]>
 
 A Structured Field Dictionary as ordered entries.
 

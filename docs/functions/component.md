@@ -11,7 +11,7 @@ HTTP field names are normalized to lowercase. Derived component names are case-s
 | Parameter | Type |
 | :------ | :------ |
 | `name` | `string` |
-| `parameters` | [`ComponentParameters`](../type-aliases/ComponentParameters.md) |
+| `parameters?` | [`ComponentParameters`](../type-aliases/ComponentParameters.md) |
 
 ## Returns
 

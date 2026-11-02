@@ -1,5 +1,5 @@
 # Type Alias: ComponentParameter
 
-> **ComponentParameter** = readonly \[`string`, [`ComponentParameterValue`](ComponentParameterValue.md)]
+> **ComponentParameter** = readonly \[`name`: `string`, `value`: [`ComponentParameterValue`](ComponentParameterValue.md)]
 
 An ordered HTTP message component parameter.

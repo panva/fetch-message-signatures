@@ -1,6 +1,6 @@
-# Function: rsaV1\_5Sha256Signer()
+# Function: rsaV1_5Sha256Signer()
 
-> **rsaV1\_5Sha256Signer**(`key`): [`SignerFactory`](../type-aliases/SignerFactory.md)
+> **rsaV1_5Sha256Signer**(`key`): [`SignerFactory`](../type-aliases/SignerFactory.md)
 
 Creates a fixed-key signer factory backed by Web Cryptography for RFC 9421 `rsa-v1_5-sha256`.
 
@@ -11,7 +11,7 @@ provided for peers that require PKCS#1 v1.5, which RFC 9421 describes as the wea
 
 | Parameter | Type | Description |
 | :------ | :------ | :------ |
-| `key` | `CryptoKey` | Web Cryptography's `CryptoKey` for an RSASSA-PKCS1-v1\_5 private key with SHA-256 and `sign` usage. |
+| `key` | `CryptoKey` | Web Cryptography's `CryptoKey` for an RSASSA-PKCS1-v1_5 private key with SHA-256 and `sign` usage. |
 
 ## Returns
 

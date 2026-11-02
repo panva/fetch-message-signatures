@@ -1,12 +1,12 @@
-# Function: generateRsaV1\_5Sha256KeyPair()
+# Function: generateRsaV1_5Sha256KeyPair()
 
-> **generateRsaV1\_5Sha256KeyPair**(`extractable?`, `modulusLength?`): `Promise`<[`CryptoKeyPair`](../interfaces/CryptoKeyPair.md)>
+> **generateRsaV1_5Sha256KeyPair**(`extractable?`, `modulusLength?`): `Promise`<[`CryptoKeyPair`](../interfaces/CryptoKeyPair.md)>
 
 Generates an RSA key pair for the RFC 9421 `rsa-v1_5-sha256` algorithm.
 
 The generated public key is represented by Web Cryptography's `CryptoKey` and is always
 extractable. RSA keys usually come from existing key management rather than from this generator,
-and [rsaV1\_5Sha256Signer](rsaV1_5Sha256Signer.md) and [rsaV1\_5Sha256Verifier](rsaV1_5Sha256Verifier.md) accept an RSASSA-PKCS1-v1\_5 key
+and [rsaV1_5Sha256Signer](rsaV1_5Sha256Signer.md) and [rsaV1_5Sha256Verifier](rsaV1_5Sha256Verifier.md) accept an RSASSA-PKCS1-v1_5 key
 of any modulus length.
 
 Prefer `rsa-pss-sha512` or `ed25519` for a new design. This algorithm is provided for peers that

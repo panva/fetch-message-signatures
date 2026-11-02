@@ -46,7 +46,7 @@ A successfully verified signature.
 
 ### parameters
 
-> `readonly` **parameters**: readonly readonly \[`string`, [`StructuredFieldBareItem`](../type-aliases/StructuredFieldBareItem.md)]\[]
+> `readonly` **parameters**: readonly (readonly \[`string`, [`StructuredFieldBareItem`](../type-aliases/StructuredFieldBareItem.md)])\[]
 
 #### Inherited from
 
